@@ -2,37 +2,6 @@
 
 ---
 
-# Changelog — Cycle 29
-
-## Who This Helps
-- **Stakeholder:** gosq users with large, diverse production schemas
-- **Impact:** The test suite had never been exercised at production scale — all existing tests used 2–3 tables, 1–3 columns each. A new scale stress test covers 17 tables and 108 columns with realistic naming patterns (common snake_case, `http`/`tls`/`api`/`url`/`ip`/`uuid`/`id` initialisations, digit-prefixed columns, compound names, tables provided out of alphabetical order). Running this test exposed that `go/format` aligns `=` signs within `var ()` blocks with padding spaces — a detail not visible from small tests — and verified it does not affect correctness. The test also explicitly asserts determinism (two calls, same input → identical bytes) and correct alphabetical table ordering at scale.
-
-## Observed
-- All previous codegen tests used at most 2 tables and 3 columns. No test verified Generate at the scale of a real production schema.
-- The question "would this tool survive contact with a real schema?" had no automated answer.
-- A digit-prefixed column (`2fa_enabled`) in a multi-column table had never been tested as part of a larger var block — only in isolation.
-- Compound initialism patterns (`http_requests.url_path` → `HTTPRequestsURLPath`, `oauth_clients.redirect_uri` → `OauthClientsRedirectURI`) had never been tested at scale.
-- Writing the test revealed that `go/format` aligns `=` signs with padding spaces in `var (...)` blocks. Checking `"Ident = NewField(...)"` with a single space fails when the block contains a longer identifier. This is a correctness subtlety: the generated identifiers are right, but testing them required splitting checks into identifier-name and NewField-argument assertions.
-
-## Applied
-- Added `TestGenerateProductionScale` to `internal/codegen/codegen_test.go`: 17 tables, 108 columns, deliberately out-of-alphabetical order.
-- Assertions: no error; header present; 17 `NewTable(` calls; 108 `NewField(` calls; alphabetical sort (Accounts before Users); 12 identifier-name checks covering all major initialism patterns; 8 NewField-argument checks; determinism (two calls produce identical bytes).
-- Separated identifier and NewField checks after discovering the `go/format` alignment behavior.
-- **File:** `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The tool has now been stress-tested at realistic scale. All known correctness gaps are covered. Further improvements should be driven by real user feedback — production schemas with non-public schema names, unusual column naming conventions, or scale issues beyond 17 tables.
-
----
-
 # Changelog — Cycle 28
 
 ## Who This Helps

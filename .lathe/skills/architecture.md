@@ -43,7 +43,7 @@ This is a clean one-way pipeline. Each stage has a single responsibility and a c
 
 **Current state:** Fully implemented. `Generate(tables []introspect.Table, cfg Config) ([]byte, error)`:
 - Sorts tables alphabetically (determinism guarantee)
-- Detects identifier collisions before rendering (returns a descriptive error naming both conflicting tables/columns)
+- Detects all four identifier collision types before rendering (returns a descriptive error naming both conflicting tables/columns)
 - Renders `// Code generated` header, package declaration, import, then one `var Table = NewTable(...)` + `var (...)` block per table
 - Applies `go/format` to guarantee gofmt-clean output
 
@@ -51,9 +51,12 @@ This is a clean one-way pipeline. Each stage has a single responsibility and a c
 - `Package string` — Go package name (default: `"schema"`)
 - `DotImport bool` — whether to use `import . "github.com/libliflin/gosq"` (default: `true`)
 
-**`toExported(name string) string`** — converts `snake_case` to `PascalCase` with Go initialisms. Not exported. Tested directly via `TestToExported` (31 subtests). The full initialism list: `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`.
+**`toExported(name string) string`** — converts `snake_case` to `PascalCase` with Go initialisms. Not exported. Tested directly via `TestToExported` (32 subtests). The full initialism list: `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`.
 
-**Known limitation in `toExported`:** The function uses `part[:1]` (byte-slicing) for capitalization. For ASCII inputs (all currently tested), this is correct. For non-ASCII input starting with a multi-byte UTF-8 character, `part[:1]` would be a partial rune. This hasn't been tested against non-ASCII Postgres identifiers.
+**Identifier capitalization:** The function uses `[]rune` slicing (not byte slicing) for capitalization:
+`strings.ToUpper(string([]rune(part)[:1])) + string([]rune(part)[1:])`. This correctly handles multi-byte UTF-8 characters at the start of a word (fixed in cycle 24).
+
+**Blank identifier guard:** If `toExported(tbl.Name) == "_"`, `Generate` returns an error immediately. This prevents generating `var _ = NewTable(...)` which would compile but silently discard the value via the blank identifier (added in cycle 25).
 
 ### `main.go`
 

@@ -22,25 +22,36 @@ They open `schema/schema.go`, see their tables and columns as clean Go identifie
 
 **What success looks like:** The generated code compiles on the first run against their actual schema. Output is gofmt-clean and deterministic — same schema in, same file out, every time. They regenerate on schema changes and only see the diffs that reflect actual schema changes, nothing else.
 
-**What would make them trust it:** It handles their schema without surprises — unusual column names, reserved words, digit-prefixed columns, long names. Identifier collisions are caught and named, not silently broken. Error messages say what went wrong and where.
+**What would make them trust it:** It handles their schema without surprises — unusual column names, reserved words, digit-prefixed columns, non-ASCII identifiers, long names. Identifier collisions are caught and named, not silently broken. Error messages say what went wrong and where.
 
 **What would make them leave:** Generated code that doesn't compile. A table with an unusual column name causing a panic or cryptic format error. Spurious diffs between runs. Identifiers that conflict with Go conventions in ways that break their builds.
 
-**Where the project currently stands:** The core case works well. The tool handles common snake_case patterns, filters views, detects identifier collisions, validates package names early, and handles digit-prefixed and all-underscore column names. The gaps are at the margin: **real-world schema patterns that the test suite hasn't encountered** — non-ASCII identifiers, Postgres-quoted mixed-case names, very large schemas. These haven't been stress-tested. The tests use small, clean, ASCII-only inputs. Production databases don't.
+**Where the project currently stands (after cycle 28):** The core case works well. The tool handles:
+- Common `snake_case` patterns (`users.id` → `UsersID`, `orders.created_at` → `OrdersCreatedAt`)
+- Non-ASCII column names starting with multi-byte UTF-8 characters (fixed cycle 24 — rune-slicing instead of byte-slicing)
+- Digit-prefixed column names (`2fa_enabled` → `_2faEnabled`)
+- All-underscore column names (`___` → `_` suffix in field ident)
+- Blank-identifier table names (`_`, `__` — errors early with a clear message)
+- All four types of identifier collision: table-table, column-column, field-field (cross-table), and table-field
+- Package name validation before connecting to the database
+- View filtering (`table_type = 'BASE TABLE'`)
+- 30-second context timeout
 
-**The most important unanswered question:** Would this tool handle a real user's production schema without surprises?
+**The remaining uncertainty:** The test suite uses small, clean, hand-crafted inputs (2-3 tables, 1-3 columns each). Production databases don't look like that. A real user's schema might have 80 tables, 500 columns, a mix of `snake_case`, `camelCase` (quoted in Postgres), numeric prefixes, and initialism-heavy names. This hasn't been tested against anything at that scale or variety. Does the tool behave correctly and produce no surprises at that scale? Unknown.
+
+**The most important unanswered question:** Would this tool handle a real user's production schema without surprises, at production scale?
 
 ### Maintainers / Contributors
 
 Developers working on gosq-codegen itself — currently the author.
 
-**First encounter:** They clone the repo. The pipeline is clean: `internal/introspect` queries `information_schema.columns`, returns `[]Table`. `internal/codegen` renders `[]Table` into Go source. `main.go` is a tight CLI that wires flags to the pipeline. Tests in `codegen_test.go` have 11 test functions (including 31 subtests in `TestToExported`) covering 98.2% of the codegen package.
+**First encounter:** They clone the repo. The pipeline is clean: `internal/introspect` queries `information_schema.columns`, returns `[]Table`. `internal/codegen` renders `[]Table` into Go source. `main.go` is a tight CLI that wires flags to the pipeline. Tests in `codegen_test.go` have 12 test functions (including 32 subtests in `TestToExported`) covering 98.5% of the codegen package.
 
 **What success looks like:** Adding support for a new edge case is a small, targeted change. Tests fail when output is wrong. Error messages point to the cause, not an internal line number.
 
-**What would build trust:** Tests that document behavior for unusual inputs. Clear package boundaries. Errors that include the table/column causing the problem. Consistent patterns they can follow for new additions.
+**What builds trust:** Tests that document behavior for unusual inputs. Clear package boundaries. Errors that include the table/column causing the problem. Consistent patterns they can follow for new additions.
 
-**Where the project currently stands:** Solid. The one lingering issue: `introspect_test.go` has `TestTableStructure`, which constructs a `Table` struct inline and asserts `len(Columns)` and `Columns[2].IsNullable`. It exercises zero code paths — the `introspect` package has no non-trivial logic outside `Tables`, which requires a live DB. The test isn't harmful, but it sets a false expectation.
+**Where the project currently stands:** Solid. The `introspect_test.go` file correctly contains only `package introspect` — the package's only logic (`Tables`) requires a live database. No misleading test stubs.
 
 ### The gosq project itself
 
@@ -92,21 +103,27 @@ Each cycle:
 
 The "pick" step is an act of empathy. You're not grinding through a queue — you're asking what would make the biggest real difference to the person who just found this project.
 
-**The bias to watch for:** When everything passes and looks clean, the temptation is to polish — README tweaks, doc alignment, minor refactors. Each one is small and correct. But the stakeholder doesn't need a prettier README. They need confidence the tool handles their real-world schema. If you're not sure whether the tool survives a production database, that uncertainty is the next cycle — not another doc improvement.
+**The bias to watch for:** When everything passes and looks clean, the temptation is to polish — README tweaks, doc alignment, minor refactors. Each one is small and correct. But the stakeholder doesn't need a prettier README. They need confidence the tool handles their real-world schema at real-world scale. If you haven't built a test with 15+ tables and 100+ columns with diverse naming patterns, that uncertainty is the next cycle — not another doc improvement.
+
+The highest-value change is often something that doesn't exist yet — a test fixture that would catch a real bug, an edge case nobody has tried, an input shape that mimics actual production use. You can always build realistic test inputs yourself: you don't need a live database to construct a `[]introspect.Table` with 15 tables, 100 columns, mixed naming styles, initialisations, numeric prefixes, and non-ASCII names.
 
 ---
 
 ## What Matters Now
 
-The project has gone through 23 cycles. The core works. The test suite covers happy-path and known edge cases well. The questions are no longer about whether the tool works — they're about whether it would survive contact with a real production database:
+The project has gone through 28 cycles. The core works and all known correctness gaps have been addressed. The questions are no longer about whether known edge cases compile — they're about whether the tool survives contact with a real production database:
 
-- **Non-ASCII identifiers.** Postgres allows non-ASCII characters in quoted identifiers. `toExported` uses `part[:1]` (byte-slicing, not rune-slicing). A column name starting with a multi-byte UTF-8 character (e.g., `é`, `ñ`, `中`) would produce a broken byte at position 0, and the resulting identifier would be invalid UTF-8 or cause a cryptic error from `go/format`. Has this been tested? No.
-- **Blank identifier collision.** A table named `_` produces `toExported("_") = "_"`, generating `var _ = NewTable("_")`. The blank identifier discards the value silently — it can never be referenced. Same for a column in a table that produces a `_`-prefixed identifier. Is this the right behavior? Should it error like a collision?
-- **Very long names.** Postgres allows 63-character identifiers. A column named `very_long_column_name_that_goes_on_for_a_while` produces a long Go identifier that `go/format` would handle fine, but it's worth verifying nothing breaks at scale.
-- **`TestTableStructure` in `introspect_test.go`.** This test constructs a `Table` inline and asserts len/nullable. It exercises zero code paths. It's not harmful, but a contributor reading it would assume the introspect package has unit tests. Should it be removed, or expanded to test something real (like column ordering behavior)?
-- **`go vet` and `staticcheck` clean?** Run them and verify.
+- **Scale stress-testing.** The test suite uses 2-3 tables, 1-3 columns each. A real user's schema has 50-200 tables, many with 20-50 columns. Does collision detection, sorting, and output formatting work correctly at that scale? Is the output still deterministic? Does anything unexpected happen when table count is large? You can test this right now: build a `[]introspect.Table` with 15-20 tables, 8-12 columns each, diverse naming patterns, and run `Generate`. No live database needed.
 
-None of these are urgent. All of them are worth a cycle if the answer reveals a real gap.
+- **Diverse naming patterns at scale.** The test suite covers ASCII snake_case, one non-ASCII case (`éclat`), one digit-prefix case (`2fa_enabled`), and a handful of collision cases. A production schema might have: `camelCase` columns (quoted in Postgres), columns with numbers in the middle (`order_123_status`), mixed initialism patterns (`oauth_api_url`), or very long names (up to 63 chars per Postgres limit). Have any of these been tested together in a realistic schema? No.
+
+- **Non-public schema behavior.** The `-schema` flag passes the schema name to the query correctly, but this has only been tested conceptually. A user running `gosq-codegen -schema reporting` or `-schema myapp` should get the same quality output as a `public` schema user. Does the tool produce correct output? Does the warning message correctly name the non-public schema if it's empty?
+
+- **`staticcheck` clean?** `go vet` is clean. `staticcheck` checks additional patterns — unused exports, deprecated calls, incorrect usage of standard library. Is it clean? Run it if available.
+
+- **Blank field identifiers from column names.** A column named `_` in table `items` produces `toExported("_") = "_"` for the column part, making the full field ident `Items_`. This is a valid exported identifier. But is the behavior documented? A test for this case would make the contract explicit.
+
+None of these are urgent. But the scale/diversity question is the one most likely to reveal a real gap for a real user.
 
 Never treat any list — in a README, an issue, or a snapshot — as a queue to grind through. Lists are context.
 
@@ -144,7 +161,7 @@ Each cycle makes exactly one improvement. If you try to do two things you'll do 
 
 **Polishing internals users never see.** `toExported` is an internal function. Its implementation is correct and tested. Don't refactor for aesthetics.
 
-**Fidgeting instead of stress-testing.** The project has spent several cycles on polish — doc fixes, README updates, error message cleanups. These were all correct. But the highest-value open question is whether the tool handles the schema patterns a real user would throw at it. Non-ASCII column names, blank-identifier edge cases, production-scale table counts — these haven't been tested. If you've spent multiple cycles polishing and haven't found a real edge case, look harder. Ask: would this tool survive contact with a real user's data?
+**Fidgeting instead of stress-testing.** After 28 cycles, the correctness gaps for small inputs are closed. But the tool has never been exercised against inputs that look like real production schemas — large, diverse, messy. Each polish cycle you do instead of building realistic test inputs is a cycle where you avoid finding the real gap. You can always construct realistic test inputs yourself — build a `[]introspect.Table` with 15 tables, 100 columns, and diverse naming patterns right now. Ask: "have I tested this against inputs that look like what a real user would feed it?" If not, that's the cycle.
 
 When in doubt: would a gosq user with a real production schema notice this change?
 

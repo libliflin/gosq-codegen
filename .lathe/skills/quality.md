@@ -31,14 +31,13 @@ Generated variable names derive from table and column names. PostgreSQL names ar
 
 The current `toExported` function is:
 - Correct for all common ASCII snake_case patterns (`users.id` → `UsersID`, `orders.created_at` → `OrdersCreatedAt`)
-- Tested against 31 cases in `TestToExported`
+- Correct for non-ASCII input starting with multi-byte UTF-8 characters (fixed in cycle 24 — uses `[]rune` slicing instead of byte slicing)
+- Tested against 32 cases in `TestToExported` (including `{"éclat", "Éclat"}`)
 - Stable — changing it renames variables in users' codebases
 
 **When NOT to change `toExported`:** Aesthetic disagreements, speculative coverage, or theoretical correctness for inputs that don't appear in real schemas.
 
 **When to change `toExported`:** A user reports that a real column name produces a wrong or non-compilable identifier. Fix it, test it, document it as a naming change.
-
-**Known issue: byte-slicing on non-ASCII input.** `toExported` capitalizes using `part[:1]` — byte-slicing, not rune-slicing. For any column name starting with a multi-byte UTF-8 character (e.g., accented characters, non-Latin scripts), `part[:1]` would be an incomplete rune, producing a broken string. This would likely cause `go/format` to return an error with a message that doesn't point to the schema column as the cause. This has not been tested. If this is ever investigated, the fix is to convert to `[]rune` before slicing: `string([]rune(part)[:1])`, and add `TestToExported` cases covering non-ASCII inputs.
 
 **The current initialism list:** `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`. Adding a new initialism is a breaking change for users who have the corresponding column names — document it.
 
@@ -51,12 +50,26 @@ Error messages should name the specific table or column that caused the failure:
 ```go
 // Good — names the problem
 return nil, fmt.Errorf("tables %q and %q both produce identifier %q", prev, tbl.Name, ident)
+return nil, fmt.Errorf("table %q produces blank identifier %q; it cannot be referenced in Go", tbl.Name, ident)
 
 // Not helpful
 return nil, fmt.Errorf("identifier collision detected")
 ```
 
 `main.go` prefixes errors with `"gosq-codegen: "` and the operation name (e.g., `"gosq-codegen: introspect: "`). Internal packages (`introspect`, `codegen`) should not include their own package name in error strings — callers add context via wrapping. This is already correct; maintain the pattern.
+
+---
+
+## Collision detection covers all four cases
+
+As of cycle 28, `Generate` detects all four ways identifier collisions can surface in generated output:
+
+1. Two tables produce the same `TableIdent` (e.g. `user_data` and `user__data` → both `UserData`)
+2. Two columns in the same table produce the same `ColIdent`
+3. Two different table+column pairs produce the same full field ident (`TableIdent + ColIdent`) across tables
+4. A table's ident matches a field ident from another table (e.g. table `users_id` and field `users.id` → both `UsersID`)
+
+All four are caught before rendering. Don't weaken this — silent identifier collisions produce generated Go that fails the user's build with a confusing `DO NOT EDIT` file as the locus.
 
 ---
 

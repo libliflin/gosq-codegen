@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/libliflin/gosq-codegen/internal/introspect"
@@ -267,6 +269,248 @@ func TestToExported(t *testing.T) {
 				t.Errorf("toExported(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestGenerateProductionScale(t *testing.T) {
+	// Simulates a realistic production schema: 17 tables, 108 columns total.
+	// Naming patterns include: common snake_case, digit-prefixed columns,
+	// compound initialisations (http, url, tls, api, ip, uuid, id), long names,
+	// and tables provided deliberately out of alphabetical order to exercise sort.
+	// Verifies: no error, deterministic output, alphabetical table order,
+	// correct identifiers for key naming patterns, expected table and field counts.
+	tables := []introspect.Table{
+		// Deliberately unordered to exercise alphabetical sort.
+		{Schema: "public", Name: "users", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "email", DataType: "text", OrdinalPos: 2},
+			{Name: "full_name", DataType: "text", OrdinalPos: 3},
+			{Name: "password_hash", DataType: "text", OrdinalPos: 4},
+			{Name: "is_active", DataType: "boolean", OrdinalPos: 5},
+			{Name: "role", DataType: "text", OrdinalPos: 6},
+			{Name: "last_login_at", DataType: "timestamptz", OrdinalPos: 7},
+			{Name: "2fa_enabled", DataType: "boolean", OrdinalPos: 8},
+		}},
+		{Schema: "public", Name: "accounts", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "name", DataType: "text", OrdinalPos: 2},
+			{Name: "owner_id", DataType: "integer", OrdinalPos: 3},
+			{Name: "plan_id", DataType: "integer", OrdinalPos: 4},
+			{Name: "created_at", DataType: "timestamptz", OrdinalPos: 5},
+			{Name: "updated_at", DataType: "timestamptz", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "api_keys", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "account_id", DataType: "integer", OrdinalPos: 2},
+			{Name: "key_hash", DataType: "text", OrdinalPos: 3},
+			{Name: "expires_at", DataType: "timestamptz", OrdinalPos: 4},
+			{Name: "is_active", DataType: "boolean", OrdinalPos: 5},
+			{Name: "scopes", DataType: "text[]", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "audit_logs", Columns: []introspect.Column{
+			{Name: "id", DataType: "bigint", OrdinalPos: 1},
+			{Name: "table_name", DataType: "text", OrdinalPos: 2},
+			{Name: "row_id", DataType: "integer", OrdinalPos: 3},
+			{Name: "action", DataType: "text", OrdinalPos: 4},
+			{Name: "performed_by", DataType: "integer", OrdinalPos: 5},
+			{Name: "ip_addr", DataType: "inet", OrdinalPos: 6},
+			{Name: "created_at", DataType: "timestamptz", OrdinalPos: 7},
+		}},
+		{Schema: "public", Name: "billing_plans", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "name", DataType: "text", OrdinalPos: 2},
+			{Name: "price_cents", DataType: "integer", OrdinalPos: 3},
+			{Name: "interval_days", DataType: "integer", OrdinalPos: 4},
+			{Name: "is_active", DataType: "boolean", OrdinalPos: 5},
+		}},
+		{Schema: "public", Name: "campaigns", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "account_id", DataType: "integer", OrdinalPos: 2},
+			{Name: "name", DataType: "text", OrdinalPos: 3},
+			{Name: "status", DataType: "text", OrdinalPos: 4},
+			{Name: "launched_at", DataType: "timestamptz", OrdinalPos: 5},
+			{Name: "ended_at", DataType: "timestamptz", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "devices", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "user_id", DataType: "integer", OrdinalPos: 2},
+			{Name: "device_uuid", DataType: "uuid", OrdinalPos: 3},
+			{Name: "platform", DataType: "text", OrdinalPos: 4},
+			{Name: "last_seen_at", DataType: "timestamptz", OrdinalPos: 5},
+			{Name: "push_token", DataType: "text", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "email_templates", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "name", DataType: "text", OrdinalPos: 2},
+			{Name: "subject", DataType: "text", OrdinalPos: 3},
+			{Name: "html_body", DataType: "text", OrdinalPos: 4},
+			{Name: "text_body", DataType: "text", OrdinalPos: 5},
+			{Name: "created_at", DataType: "timestamptz", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "feature_flags", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "name", DataType: "text", OrdinalPos: 2},
+			{Name: "enabled", DataType: "boolean", OrdinalPos: 3},
+			{Name: "rollout_pct", DataType: "integer", OrdinalPos: 4},
+			{Name: "updated_at", DataType: "timestamptz", OrdinalPos: 5},
+		}},
+		{Schema: "public", Name: "http_requests", Columns: []introspect.Column{
+			{Name: "id", DataType: "bigint", OrdinalPos: 1},
+			{Name: "method", DataType: "text", OrdinalPos: 2},
+			{Name: "url_path", DataType: "text", OrdinalPos: 3},
+			{Name: "status_code", DataType: "integer", OrdinalPos: 4},
+			{Name: "duration_ms", DataType: "integer", OrdinalPos: 5},
+			{Name: "user_agent", DataType: "text", OrdinalPos: 6},
+			{Name: "created_at", DataType: "timestamptz", OrdinalPos: 7},
+		}},
+		{Schema: "public", Name: "invitations", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "email", DataType: "text", OrdinalPos: 2},
+			{Name: "account_id", DataType: "integer", OrdinalPos: 3},
+			{Name: "token", DataType: "text", OrdinalPos: 4},
+			{Name: "sent_at", DataType: "timestamptz", OrdinalPos: 5},
+			{Name: "accepted_at", DataType: "timestamptz", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "job_queue", Columns: []introspect.Column{
+			{Name: "id", DataType: "bigint", OrdinalPos: 1},
+			{Name: "job_type", DataType: "text", OrdinalPos: 2},
+			{Name: "payload", DataType: "jsonb", OrdinalPos: 3},
+			{Name: "status", DataType: "text", OrdinalPos: 4},
+			{Name: "attempts", DataType: "integer", OrdinalPos: 5},
+			{Name: "last_error", DataType: "text", OrdinalPos: 6},
+			{Name: "scheduled_at", DataType: "timestamptz", OrdinalPos: 7},
+			{Name: "completed_at", DataType: "timestamptz", OrdinalPos: 8},
+		}},
+		{Schema: "public", Name: "oauth_clients", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "name", DataType: "text", OrdinalPos: 2},
+			{Name: "client_id", DataType: "text", OrdinalPos: 3},
+			{Name: "client_secret", DataType: "text", OrdinalPos: 4},
+			{Name: "redirect_uri", DataType: "text", OrdinalPos: 5},
+			{Name: "scopes", DataType: "text[]", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "products", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "name", DataType: "text", OrdinalPos: 2},
+			{Name: "sku", DataType: "text", OrdinalPos: 3},
+			{Name: "price_cents", DataType: "integer", OrdinalPos: 4},
+			{Name: "stock_qty", DataType: "integer", OrdinalPos: 5},
+			{Name: "category_id", DataType: "integer", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "sessions", Columns: []introspect.Column{
+			{Name: "id", DataType: "text", OrdinalPos: 1},
+			{Name: "user_id", DataType: "integer", OrdinalPos: 2},
+			{Name: "token", DataType: "text", OrdinalPos: 3},
+			{Name: "ip_addr", DataType: "inet", OrdinalPos: 4},
+			{Name: "user_agent", DataType: "text", OrdinalPos: 5},
+			{Name: "expires_at", DataType: "timestamptz", OrdinalPos: 6},
+			{Name: "created_at", DataType: "timestamptz", OrdinalPos: 7},
+		}},
+		{Schema: "public", Name: "tls_certificates", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "domain", DataType: "text", OrdinalPos: 2},
+			{Name: "issued_at", DataType: "timestamptz", OrdinalPos: 3},
+			{Name: "expires_at", DataType: "timestamptz", OrdinalPos: 4},
+			{Name: "issuer", DataType: "text", OrdinalPos: 5},
+			{Name: "fingerprint", DataType: "text", OrdinalPos: 6},
+		}},
+		{Schema: "public", Name: "webhook_endpoints", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "account_id", DataType: "integer", OrdinalPos: 2},
+			{Name: "url", DataType: "text", OrdinalPos: 3},
+			{Name: "secret_hash", DataType: "text", OrdinalPos: 4},
+			{Name: "event_types", DataType: "text[]", OrdinalPos: 5},
+			{Name: "is_active", DataType: "boolean", OrdinalPos: 6},
+			{Name: "created_at", DataType: "timestamptz", OrdinalPos: 7},
+		}},
+	}
+
+	cfg := Config{Package: "schema", DotImport: true}
+	got, err := Generate(tables, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := string(got)
+
+	// Generated header must be present.
+	if !strings.HasPrefix(out, "// Code generated by gosq-codegen; DO NOT EDIT.\n") {
+		t.Error("missing generated-file header")
+	}
+
+	// All 17 tables must be present.
+	tableCount := strings.Count(out, "NewTable(")
+	if tableCount != 17 {
+		t.Errorf("expected 17 NewTable calls, got %d", tableCount)
+	}
+
+	// All 108 columns must be present.
+	fieldCount := strings.Count(out, "NewField(")
+	if fieldCount != 108 {
+		t.Errorf("expected 108 NewField calls, got %d", fieldCount)
+	}
+
+	// Tables must be sorted alphabetically: "Accounts" before "Users".
+	accountsPos := strings.Index(out, `var Accounts = NewTable("accounts")`)
+	usersPos := strings.Index(out, `var Users = NewTable("users")`)
+	if accountsPos < 0 {
+		t.Error("Accounts table missing from output")
+	}
+	if usersPos < 0 {
+		t.Error("Users table missing from output")
+	}
+	if accountsPos >= 0 && usersPos >= 0 && accountsPos >= usersPos {
+		t.Error("tables not in alphabetical order: Accounts should precede Users")
+	}
+
+	// Key naming patterns must produce correct identifiers.
+	// go/format aligns = signs within var blocks, so exact "Ident = NewField(...)"
+	// checks are fragile. Instead, verify the identifier name and the NewField
+	// argument independently — both must be present for the wiring to be correct.
+	identChecks := []string{
+		"HTTPRequests",        // http initialism
+		"HTTPRequestsURLPath", // http + url initialisms
+		"TLSCertificates",     // tls initialism
+		"TLSCertificatesID",   // tls + id initialisms
+		"APIKeys",             // api initialism
+		"APIKeysAccountID",    // api + id initialisms
+		"AuditLogsIPAddr",     // ip initialism
+		"DevicesDeviceUUID",   // uuid initialism
+		"Users_2faEnabled",    // digit-prefixed column: 2fa_enabled → _2faEnabled
+		"OauthClients",        // oauth is not an initialism — capitalised normally
+		"OauthClientsClientID",
+		"OauthClientsRedirectURI", // uri initialism
+	}
+	for _, ident := range identChecks {
+		if !strings.Contains(out, ident) {
+			t.Errorf("expected identifier %q in output", ident)
+		}
+	}
+
+	fieldArgChecks := []string{
+		`NewField("http_requests.url_path")`,
+		`NewField("tls_certificates.id")`,
+		`NewField("api_keys.account_id")`,
+		`NewField("audit_logs.ip_addr")`,
+		`NewField("devices.device_uuid")`,
+		`NewField("users.2fa_enabled")`,
+		`NewField("oauth_clients.client_id")`,
+		`NewField("oauth_clients.redirect_uri")`,
+	}
+	for _, arg := range fieldArgChecks {
+		if !strings.Contains(out, arg) {
+			t.Errorf("expected output to contain %q", arg)
+		}
+	}
+
+	// Output must be deterministic: calling Generate again with the same input
+	// must produce identical bytes.
+	got2, err := Generate(tables, cfg)
+	if err != nil {
+		t.Fatalf("second Generate call: unexpected error: %v", err)
+	}
+	if !bytes.Equal(got, got2) {
+		t.Error("Generate is not deterministic: two calls with the same input produced different output")
 	}
 }
 

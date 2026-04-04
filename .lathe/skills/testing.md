@@ -12,11 +12,9 @@ Two packages. Two completely different testing strategies.
 
 The real job of this package is to query `information_schema.columns` in a live Postgres database. That can't be unit-tested without a real database.
 
-**What to test:** Struct construction and field behavior that doesn't require a DB — nullable flags, column ordering by `OrdinalPos`, correct field values. The existing `TestTableStructure` constructs a `Table` inline and asserts `len(tbl.Columns)` and `tbl.Columns[2].IsNullable`. This is the right *pattern*, but it exercises zero code paths (the package has no non-trivial logic outside `Tables`, which requires a live DB).
+**Current state:** `introspect_test.go` contains only `package introspect`. The package's only logic (`Tables`) requires a live DB and has 0% automated coverage — this is correct and expected. The misleading `TestTableStructure` stub (which tested nothing) was removed in cycle 26. There is nothing to unit-test in the `introspect` package at present; `Table` and `Column` are pure data types with no behavior.
 
-**What not to do:** Don't mock `database/sql` to simulate query results. The mock/real divergence risk is high and the tests would be fragile. If you need confidence on the query path, test it manually against a real database, or add an integration test (clearly labeled `//go:build integration`) that requires a `TEST_DSN` environment variable.
-
-**If expanding introspect tests:** Follow the inline-construction pattern — build `Table` values directly, assert behavior you care about. Keep it honest: there isn't much to test here without a DB. A test that documents the struct layout is fine; one that invents something to test is not.
+**If adding introspect tests:** If logic is ever extracted from `Tables` that can be unit-tested (e.g., a helper that parses or transforms query results), test it inline — construct `Table` values directly, assert behavior you care about. Don't mock `database/sql` to simulate query results. If you need confidence on the full query path, add an integration test (clearly labeled `//go:build integration`) that requires a `TEST_DSN` environment variable and documents how to run it.
 
 ### `internal/codegen`
 
@@ -25,10 +23,10 @@ This package turns `[]introspect.Table` into a `[]byte` of Go source. It require
 **What to test:**
 - The exact shape and content of generated Go source for a known input
 - That output is deterministic (same input → same output)
-- Edge cases: empty table list, table with no columns, digit-leading column names (`2fa_enabled`), all-underscore column names (`___`), identifier collisions, multiple tables (sort order), `DotImport: false` path
-- `toExported` directly — via the table-driven `TestToExported` (31 subtests)
+- Edge cases: empty table list, table with no columns, digit-leading column names (`2fa_enabled`), all-underscore column names (`___`), non-ASCII column names (`éclat`), identifier collisions (all four types), multiple tables (sort order), `DotImport: false` path
+- `toExported` directly — via the table-driven `TestToExported` (32 subtests)
 
-**Current state:** `codegen_test.go` has 11 test functions covering all of the above. Coverage is 98.2%. The only uncovered code is the `format.Source` error return path — unreachable from any valid input, not worth testing.
+**Current state:** `codegen_test.go` has 12 test functions covering all of the above. Coverage is 98.5%. The only uncovered code is the `format.Source` error return path — unreachable from any valid input, not worth testing.
 
 ---
 
@@ -67,20 +65,32 @@ Key points:
 - Ends with exactly one `\n`
 - `Generate` applies `go/format` internally — output is deterministic and must match exactly
 
-`toExported` is directly tested in `TestToExported` (table-driven, 31 subtests) covering all 17 initialisms and all known edge cases. New identifier transformation behavior belongs here.
+`toExported` is directly tested in `TestToExported` (table-driven, 32 subtests) covering all 17 initialisms and all known edge cases including the non-ASCII case (`éclat` → `Éclat`). New identifier transformation behavior belongs here.
 
 ---
 
-## Stress-testing edge cases
+## The four collision detection tests
 
-The existing tests use small, clean, ASCII-only inputs. Real production databases don't. The next tier of test value is in inputs that reveal gaps:
+The project tests all four ways identifier collisions can occur in generated output:
 
-- **Non-ASCII column names**: Postgres allows non-ASCII in quoted identifiers. A column named `prénom` or `straße` hits `part[:1]` in `toExported`, which is byte-slicing not rune-slicing. What happens?
-- **Blank identifier table names**: A table named `_` produces `toExported("_") = "_"`, generating `var _ = NewTable("_")`. The blank identifier discards the value — is that the right behavior?
-- **Large tables**: A table with 50+ columns. Output should be deterministic and compile. (Likely fine but untested.)
-- **Many tables**: A schema with 100+ tables. Mostly a throughput question, but worth verifying sort and collision detection remain correct.
+1. **Table-table collision** (`TestGenerateTableCollision`): `user_data` and `user__data` both map to `UserData`.
+2. **Column-column collision** (`TestGenerateColumnCollision`): `my_field` and `my__field` both map to `MyField` within the same table.
+3. **Cross-table field collision** (`TestGenerateCrossTableFieldCollision`): `a.b_c` and `a_b.c` both produce field ident `ABC`.
+4. **Table-field collision** (`TestGenerateTableFieldCollision`): table `users_id` and field `users.id` both produce ident `UsersID`.
 
-When adding a new edge case test, follow the existing pattern: inline construction, exact string assertion. If the output is long, it's fine — use the verbatim expected output. Don't truncate or use partial matching.
+When adding collision tests, follow this same inline-construction pattern and test that `Generate` returns a non-nil error. Don't assert the error string — just that an error occurred.
+
+---
+
+## Stress-testing edge cases — the open frontier
+
+The existing tests use small, hand-crafted inputs. Real production databases don't. The next tier of test value is realistic-scale inputs:
+
+- **Many tables, many columns**: A schema with 15-20 tables and 8-12 columns each. Output should be deterministic, compile-clean, and collision detection should remain correct. You can build this test entirely from inline `[]introspect.Table` construction — no live database needed.
+- **Diverse naming patterns**: Tables with numeric segments (`order_v2`, `segment_123_data`), compound initialisations (`oauth_api_url_params`), very long names (up to 63 chars per Postgres limit), mixed naming styles.
+- **Blank column identifier**: A column named `_` produces `toExported("_") = "_"`. The full field ident is `TableIdent + "_"` (e.g., `Items_`). This is valid but untested.
+
+When adding a new edge case test, follow the existing pattern: inline construction, exact string assertion. If the output is long, use verbatim expected output. Don't truncate or use partial matching.
 
 ---
 
@@ -104,6 +114,6 @@ There are no golden files in `testdata/`. For a project this size with a single 
 
 ---
 
-## The uncovered 1.8%
+## The uncovered 1.5%
 
 The only uncovered code is the `format.Source` error return path in `Generate`. This is unreachable from any valid input — `format.Source` only errors if the source has a syntax error, which can't happen if `Generate` is working correctly. It's not worth testing.
