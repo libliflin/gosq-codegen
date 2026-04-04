@@ -89,5 +89,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stdout, "wrote %s\n", outFile)
+	noun := "tables"
+	if len(tables) == 1 {
+		noun = "table"
+	}
+	fmt.Fprintf(os.Stdout, "wrote %s (%d %s)\n", outFile, len(tables), noun)
 }

@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 19
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** After a successful run, users now see how many tables were generated (e.g., `wrote schema/schema.go (47 tables)`). Before, the output was just `wrote schema/schema.go` with no indication of scale. This lets users immediately verify the tool captured the expected number of tables — catching misconfigurations like a wrong `-schema` flag or unexpected view filtering without opening the file.
-
-## Observed
-- `main.go` printed `wrote schema/schema.go` on success with no count.
-- A user with a large schema (30+ tables) had no way to verify output completeness at a glance.
-- The zero-table warning (cycle 9) handles the empty case, but the non-empty success path gave no quantitative feedback.
-
-## Applied
-- Changed the success message from `wrote <file>` to `wrote <file> (N table/tables)`.
-- Singular/plural handled correctly: "1 table", "N tables".
-- **File:** `main.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 18
 
 ## Who This Helps
