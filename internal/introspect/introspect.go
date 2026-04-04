@@ -7,8 +7,6 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
-
-	_ "github.com/lib/pq"
 )
 
 // Table represents a database table and its columns.

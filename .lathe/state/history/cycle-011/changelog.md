@@ -5,18 +5,18 @@
 # Changelog — Cycle 12
 
 ## Who This Helps
-- **Stakeholder:** contributors
-- **Impact:** The `internal/introspect` package no longer silently depends on the `lib/pq` driver. A contributor wanting to swap drivers (e.g., to `pgx`) now changes only `main.go`. The introspect test binary no longer pulls in the postgres driver as a side effect.
+- **Stakeholder:** gosq users
+- **Impact:** A user who customizes the package name with `-pkg mydb` now gets `schema/mydb.go` instead of `schema/schema.go`. The filename matches the package name — consistent with Go convention and less surprising when browsing the directory.
 
 ## Observed
-- `introspect.go` had `_ "github.com/lib/pq"` as a blank import, alongside the identical import in `main.go`.
-- The driver only needs to be registered once per binary (via `init()`). The `main.go` import is the right place — it's the entry point that controls which driver is in use.
-- The duplicate blank import in an internal package obscures the package's actual dependencies and ties the introspect package to a specific driver unnecessarily.
+- `main.go` hardcoded `"schema.go"` as the output filename regardless of the `-pkg` flag.
+- A user passing `-pkg mydb` would receive a file named `schema.go` with `package mydb` inside — the filename and package declaration disagreed.
+- The default case (`-pkg schema`) was unaffected, but any deviation from the default produced a mismatch.
 
 ## Applied
-- Removed `_ "github.com/lib/pq"` blank import from `internal/introspect/introspect.go`.
-- Driver registration is now solely `main.go`'s responsibility.
-- **File:** `internal/introspect/introspect.go`
+- Changed output filename from `"schema.go"` to `*pkg + ".go"` in `main.go`.
+- Updated README to note that the output file is named after the `-pkg` value.
+- **Files:** `main.go`, `README.md`
 
 ## Validated
 ```
