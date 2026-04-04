@@ -1,0 +1,16 @@
+# Binaries
+gosq-codegen
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Lathe logs (keep structure, ignore content)
+.lathe/state/logs/
+.lathe/state/snapshot.txt
