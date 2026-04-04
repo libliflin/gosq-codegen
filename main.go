@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/libliflin/gosq-codegen/internal/codegen"
@@ -44,7 +45,18 @@ func main() {
 	pkg := flag.String("pkg", "schema", "Go package name for generated file")
 	schema := flag.String("schema", "public", "PostgreSQL schema to introspect")
 	dotImport := flag.Bool("dot-import", true, "use dot-import for gosq (import . \"github.com/libliflin/gosq\")")
+	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *version {
+		bi, ok := debug.ReadBuildInfo()
+		if ok && bi.Main.Version != "" {
+			fmt.Println(bi.Main.Version)
+		} else {
+			fmt.Println("(devel)")
+		}
+		return
+	}
 
 	if *dsn == "" {
 		fmt.Fprintln(os.Stderr, "gosq-codegen: -dsn is required")

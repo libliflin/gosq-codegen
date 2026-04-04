@@ -2,6 +2,34 @@
 
 ---
 
+# Changelog — Cycle 20
+
+## Who This Helps
+- **Stakeholder:** gosq users (bug reporters) and maintainers
+- **Impact:** A user who runs into unexpected behavior can now run `gosq-codegen -version` to report the exact version they're using. Before, the flag didn't exist — running it produced a usage error. This is standard practice for Go CLI tools; its absence was an obvious gap.
+
+## Observed
+- `gosq-codegen -version` produced: `flag provided but not defined: -version`.
+- Any user filing a bug report had no way to state what version they were running without digging into `go version -m $(which gosq-codegen)`.
+- `debug.ReadBuildInfo()` is available in Go 1.18+ and is the standard way to surface module version in a Go binary built with `go install`.
+
+## Applied
+- Added `-version` flag to `main.go`.
+- If set, prints `bi.Main.Version` from `debug.ReadBuildInfo()` (e.g. `v0.1.2` for installed releases, `(devel)` for local builds) and exits 0.
+- **File:** `main.go`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (all pass)
+go vet ./...     — OK
+```
+
+## Next
+- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
+
+---
+
 # Changelog — Cycle 19
 
 ## Who This Helps
