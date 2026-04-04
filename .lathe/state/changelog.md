@@ -2,6 +2,33 @@
 
 ---
 
+# Changelog — Cycle 16
+
+## Who This Helps
+- **Stakeholder:** contributors
+- **Impact:** A contributor reading `go.mod` no longer sees `// indirect` on `lib/pq`, which is directly imported in `main.go`. The misleading marker could lead someone to believe the blank import is incidental and safe to remove — it is not.
+
+## Observed
+- `go.mod` had `require github.com/lib/pq v1.12.3 // indirect`.
+- `main.go` imports `_ "github.com/lib/pq"` directly (blank import for driver registration).
+- A direct import should not carry the `// indirect` marker. The marker is added by `go mod` only for transitive dependencies not imported by any package in the module.
+
+## Applied
+- Ran `go mod tidy`, which removed `// indirect` from the `lib/pq` require line.
+- **File:** `go.mod`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (all pass)
+go vet ./...     — OK
+```
+
+## Next
+- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
+
+---
+
 # Changelog — Cycle 15
 
 ## Who This Helps
