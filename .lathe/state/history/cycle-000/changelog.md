@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 2
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** The pipeline now has a real DB query layer. `main.go` can be wired end-to-end next cycle — one cycle away from a working first-try experience.
-
-## Observed
-- `introspect.go` had `Table`/`Column` types but no function to populate them from a database.
-- `codegen.Generate` was working but had no input source — the pipeline was severed at the bottom.
-
-## Applied
-- Implemented `introspect.Tables(db *sql.DB, schema string) ([]Table, error)`: queries `information_schema.columns`, groups by table, returns sorted `[]Table` with columns in ordinal position order.
-- Added `github.com/lib/pq` driver (blank import) via `go get`.
-- **Files:** `internal/introspect/introspect.go`, `go.mod`, `go.sum`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- Wire `main.go` end-to-end: parse `-dsn` and `-out` flags, call `introspect.Tables`, call `codegen.Generate`, write `<out>/schema.go`.
-- This is the last missing piece before the first-try user experience works.
-
----
-
 # Changelog — Cycle 1
 
 ## Who This Helps
