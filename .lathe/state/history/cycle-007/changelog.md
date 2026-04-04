@@ -2,35 +2,6 @@
 
 ---
 
-# Changelog — Cycle 9
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** When a user connects to the wrong database, typos the schema name, or points the tool at an empty schema, they now see a clear warning on stderr instead of silently receiving a `schema.go` with only `package schema`. The file still gets written (it's valid Go), but the user is told something unexpected happened.
-
-## Observed
-- `main.go` wrote the output file even when `introspect.Tables` returned zero tables.
-- A user who mistyped `-schema mypublic` (instead of `public`) would get a silent success and a useless `schema.go` — no indication anything was wrong.
-- No warning was emitted in this case.
-
-## Applied
-- Added a stderr warning when `len(tables) == 0`: `gosq-codegen: warning: no tables found in schema "<schema>"`.
-- The file is still written (it's valid, compilable Go) — the warning surfaces the likely mistake without breaking the exit-0 contract.
-- **File:** `main.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The introspect query (`information_schema.columns`) includes views as well as base tables. Most gosq users will expect only tables. Filtering to `table_type = 'BASE TABLE'` in the introspect query would prevent spurious entries for views — but this is only worth doing if users actually report the confusion.
-- The project is stable and well-tested for the core use case. Further improvements should be driven by real user feedback.
-
----
-
 # Changelog — Cycle 8
 
 ## Who This Helps

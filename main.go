@@ -60,6 +60,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if len(tables) == 0 {
+		fmt.Fprintf(os.Stderr, "gosq-codegen: warning: no tables found in schema %q\n", *schema)
+	}
+
 	src, err := codegen.Generate(tables, codegen.Config{Package: *pkg, DotImport: *dotImport})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: generate: %v\n", err)
