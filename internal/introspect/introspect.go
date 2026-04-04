@@ -38,7 +38,7 @@ ORDER BY c.table_name, c.ordinal_position`
 
 	rows, err := db.QueryContext(ctx, q, schema)
 	if err != nil {
-		return nil, fmt.Errorf("introspect: query information_schema: %w", err)
+		return nil, fmt.Errorf("query information_schema: %w", err)
 	}
 	defer rows.Close()
 
@@ -49,7 +49,7 @@ ORDER BY c.table_name, c.ordinal_position`
 		var tableName, columnName, dataType, isNullable string
 		var ordinalPos int
 		if err := rows.Scan(&tableName, &columnName, &dataType, &isNullable, &ordinalPos); err != nil {
-			return nil, fmt.Errorf("introspect: scan row: %w", err)
+			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
 		if _, ok := tableMap[tableName]; !ok {
@@ -65,7 +65,7 @@ ORDER BY c.table_name, c.ordinal_position`
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("introspect: iterate rows: %w", err)
+		return nil, fmt.Errorf("iterate rows: %w", err)
 	}
 
 	sort.Strings(tableOrder)

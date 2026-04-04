@@ -2,37 +2,6 @@
 
 ---
 
-# Changelog — Cycle 18
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** Users who encounter an error (wrong DSN, network timeout, permission denied) now see a clean, non-redundant error message. Before: `gosq-codegen: introspect: introspect: query information_schema: ...`. After: `gosq-codegen: introspect: query information_schema: ...`.
-
-## Observed
-- `introspect.go` prefixed all its errors with `"introspect: "`.
-- `main.go` wraps the returned error with `"gosq-codegen: introspect: %v"`.
-- The result was a doubled `introspect:` prefix in every error from that package.
-- Standard Go convention: library packages do not include their own name in error strings — callers add context via wrapping.
-
-## Applied
-- Removed `"introspect: "` prefix from three error strings in `introspect.Tables`:
-  `"introspect: query information_schema: %w"` → `"query information_schema: %w"`
-  `"introspect: scan row: %w"` → `"scan row: %w"`
-  `"introspect: iterate rows: %w"` → `"iterate rows: %w"`
-- **File:** `internal/introspect/introspect.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 17
 
 ## Who This Helps
