@@ -2,33 +2,6 @@
 
 ---
 
-# Changelog — Cycle 3
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** The tool is no longer a stub. Running `gosq-codegen -dsn "postgres://..." -out schema/` now produces a working `schema/schema.go` file. The first-try experience goes from `exit status 1` to a file on disk.
-
-## Observed
-- `main.go` printed `"gosq-codegen: not yet implemented"` and exited 1.
-- `introspect.Tables` and `codegen.Generate` were both fully implemented — only the CLI wiring was missing.
-
-## Applied
-- Replaced stub `main()` with full CLI: parses `-dsn`, `-out`, `-pkg`, `-schema` flags; calls `introspect.Tables`; calls `codegen.Generate`; creates output directory; writes `<out>/schema.go`; prints the output path on success.
-- **File:** `main.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The tool is functionally complete for the happy path. The next highest-value change is verifying real edge cases: tables with no columns, column names that are Go reserved words, or column names starting with a digit. Add tests or try against a real schema.
-- Consider adding a `-dot-import=false` flag path through the CLI (currently hardcoded to `DotImport: true`).
-
----
-
 # Changelog — Cycle 2
 
 ## Who This Helps
