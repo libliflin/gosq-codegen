@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 11
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** A user who mistypes the hostname or port in `-dsn` no longer waits indefinitely for a response. The query now carries a 30-second context timeout; they see a clear error message and the tool exits within that window instead of hanging until Ctrl+C.
-
-## Observed
-- `introspect.Tables` used `db.Query` with no context. `db.Query` blocks until the database responds or the OS-level TCP stack gives up (which can be minutes on an unreachable host).
-- Standard Go practice for database calls is to accept and propagate `context.Context`, enabling callers to set deadlines. The signature `Tables(db, schema)` had no way to pass one.
-
-## Applied
-- Changed `introspect.Tables` signature to `Tables(ctx context.Context, db *sql.DB, schema string)`.
-- Replaced `db.Query` with `db.QueryContext(ctx, q, schema)`.
-- In `main.go`: created `context.WithTimeout(context.Background(), 30*time.Second)` and passed it to `introspect.Tables`.
-- **Files:** `internal/introspect/introspect.go`, `main.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 10
 
 ## Who This Helps

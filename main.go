@@ -22,11 +22,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/libliflin/gosq-codegen/internal/codegen"
 	"github.com/libliflin/gosq-codegen/internal/introspect"
@@ -54,7 +56,10 @@ func main() {
 	}
 	defer db.Close()
 
-	tables, err := introspect.Tables(db, *schema)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tables, err := introspect.Tables(ctx, db, *schema)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: introspect: %v\n", err)
 		os.Exit(1)

@@ -3,6 +3,7 @@
 package introspect
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"sort"
@@ -27,7 +28,7 @@ type Column struct {
 
 // Tables queries information_schema.columns and returns all tables in the given
 // schema, sorted by table name with columns ordered by ordinal position.
-func Tables(db *sql.DB, schema string) ([]Table, error) {
+func Tables(ctx context.Context, db *sql.DB, schema string) ([]Table, error) {
 	const q = `
 SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.ordinal_position
 FROM information_schema.columns c
@@ -37,7 +38,7 @@ WHERE c.table_schema = $1
   AND t.table_type = 'BASE TABLE'
 ORDER BY c.table_name, c.ordinal_position`
 
-	rows, err := db.Query(q, schema)
+	rows, err := db.QueryContext(ctx, q, schema)
 	if err != nil {
 		return nil, fmt.Errorf("introspect: query information_schema: %w", err)
 	}
