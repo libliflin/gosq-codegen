@@ -83,6 +83,57 @@ func TestGenerateAllUnderscoreColumn(t *testing.T) {
 	}
 }
 
+func TestGenerateTableNoColumns(t *testing.T) {
+	tables := []introspect.Table{
+		{
+			Schema:  "public",
+			Name:    "events",
+			Columns: nil,
+		},
+	}
+
+	got, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "package schema\n\nimport . \"github.com/libliflin/gosq\"\n\nvar Events = NewTable(\"events\")\n"
+	if string(got) != want {
+		t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestGenerateMultipleTablesOrdered(t *testing.T) {
+	// Tables deliberately provided out of alphabetical order to verify sort.
+	tables := []introspect.Table{
+		{
+			Schema: "public",
+			Name:   "orders",
+			Columns: []introspect.Column{
+				{Name: "id", DataType: "integer", IsNullable: false, OrdinalPos: 1},
+			},
+		},
+		{
+			Schema: "public",
+			Name:   "accounts",
+			Columns: []introspect.Column{
+				{Name: "id", DataType: "integer", IsNullable: false, OrdinalPos: 1},
+			},
+		},
+	}
+
+	// Empty Package — exercises the default-package fallback.
+	got, err := Generate(tables, Config{DotImport: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "package schema\n\nimport . \"github.com/libliflin/gosq\"\n\nvar Accounts = NewTable(\"accounts\")\n\nvar (\n\tAccountsID = NewField(\"accounts.id\")\n)\n\nvar Orders = NewTable(\"orders\")\n\nvar (\n\tOrdersID = NewField(\"orders.id\")\n)\n"
+	if string(got) != want {
+		t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestGenerateSingleTable(t *testing.T) {
 	tables := []introspect.Table{
 		{

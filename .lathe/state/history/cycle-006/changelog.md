@@ -2,35 +2,6 @@
 
 ---
 
-# Changelog — Cycle 8
-
-## Who This Helps
-- **Stakeholder:** contributors
-- **Impact:** Two previously untested codegen paths are now covered. The alphabetical sort guarantee (the determinism contract) is explicitly tested. The default-package fallback is tested. Coverage rises from 93.3% → 97.8%.
-
-## Observed
-- Coverage profile showed 3 uncovered statement blocks in `Generate`: the `cfg.Package == ""` default, the `sort.Slice` comparator, and the `format.Source` error path.
-- No test passed an empty `Package` or provided 2+ tables, leaving the sort and default-package paths unexercised.
-
-## Applied
-- Added `TestGenerateTableNoColumns`: verifies a table with no columns emits only the `NewTable` var, no `var (...)` block. Documents edge-case behavior for views or incomplete schemas.
-- Added `TestGenerateMultipleTablesOrdered`: provides tables out of alphabetical order with an empty `Package` field. Verifies sorted output (`accounts` before `orders`) and the `"schema"` package default.
-- **File:** `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-coverage: 97.8% (was 93.3%)
-```
-
-## Next
-- The remaining 2.2% uncovered is the `format.Source` error return — unreachable from valid inputs, not worth testing.
-- The project is feature-complete and well-tested for its core use case. Future improvements are best driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 7
 
 ## Who This Helps
