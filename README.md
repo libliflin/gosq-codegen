@@ -27,7 +27,7 @@ go install github.com/libliflin/gosq-codegen@latest
 gosq-codegen -dsn "postgres://user:pass@localhost:5432/mydb" -out schema/
 ```
 
-This writes `schema/schema.go` into your project. Add it to version control and regenerate whenever your schema changes.
+This writes `schema/schema.go` into your project (named after the `-pkg` value). Add it to version control and regenerate whenever your schema changes.
 
 ### go:generate
 

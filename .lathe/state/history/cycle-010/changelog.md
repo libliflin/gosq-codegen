@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 12
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** A user who customizes the package name with `-pkg mydb` now gets `schema/mydb.go` instead of `schema/schema.go`. The filename matches the package name — consistent with Go convention and less surprising when browsing the directory.
-
-## Observed
-- `main.go` hardcoded `"schema.go"` as the output filename regardless of the `-pkg` flag.
-- A user passing `-pkg mydb` would receive a file named `schema.go` with `package mydb` inside — the filename and package declaration disagreed.
-- The default case (`-pkg schema`) was unaffected, but any deviation from the default produced a mismatch.
-
-## Applied
-- Changed output filename from `"schema.go"` to `*pkg + ".go"` in `main.go`.
-- Updated README to note that the output file is named after the `-pkg` value.
-- **Files:** `main.go`, `README.md`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 11
 
 ## Who This Helps

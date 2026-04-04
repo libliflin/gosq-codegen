@@ -80,7 +80,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	outFile := filepath.Join(*out, "schema.go")
+	outFile := filepath.Join(*out, *pkg+".go")
 	if err := os.WriteFile(outFile, src, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: write %s: %v\n", outFile, err)
 		os.Exit(1)
