@@ -2,6 +2,35 @@
 
 ---
 
+# Changelog — Cycle 31
+
+## Who This Helps
+- **Stakeholder:** contributors
+- **Impact:** The collision detection in `Generate` has five distinct paths (blank ident, table-table, table-vs-prior-field, column-column, field-field, field-vs-prior-table). The last of these — a field ident matching a table ident registered in an *earlier* iteration — was the only uncovered path. A contributor modifying collision detection could have silently broken it. The test documents the exact scenario that triggers it (leading-underscore table names that sort early but produce long identifiers) and confirms the error fires correctly. Coverage rises from 97.1% → 98.6%.
+
+## Observed
+- `go tool cover` showed `Generate` at 96.3%: one uncovered branch at line 66-68: `if prevTable, ok := tableIdents[fieldIdent]; ok { ... }`.
+- This fires when the current table's *field* ident matches a *previously registered table* ident. The covered sibling (line 49-51) fires when the current table's *table* ident matches a previously registered field ident. The two cases are symmetric but only one was tested.
+- The uncovered path is reachable: a table named `_users_name` has a leading underscore (`_` ASCII 95 < `u` ASCII 117), so it sorts *before* `users` alphabetically and is registered in `tableIdents` first with ident `"UsersName"`. When `users` is subsequently processed, its field `users.name` produces `fieldIdent = "UsersName"` — matching the already-registered table ident.
+
+## Applied
+- Added `TestGenerateFieldPriorTableCollision`: tables `_users_name` (no columns) and `users` with column `name`. Asserts `Generate` returns a non-nil error.
+- **File:** `internal/codegen/codegen_test.go`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (all pass)
+go vet ./...     — OK
+staticcheck ./... — OK (clean)
+coverage: 98.6% (was 97.1%)
+```
+
+## Next
+- The only remaining uncovered code is the `format.Source` error path — unreachable from any valid input, not worth testing. All collision paths are now exercised. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 30
 
 ## Who This Helps

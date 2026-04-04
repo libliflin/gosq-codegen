@@ -556,6 +556,24 @@ func TestGenerateProductionScale(t *testing.T) {
 	}
 }
 
+func TestGenerateFieldPriorTableCollision(t *testing.T) {
+	// Table "_users_name" has a leading underscore, so it sorts before "users"
+	// alphabetically ('_' ASCII 95 < 'u' ASCII 117). Its identifier is
+	// toExported("_users_name") = "UsersName". Table "users" with column "name"
+	// produces field ident "Users"+"Name" = "UsersName". The field ident matches
+	// the previously registered table ident — Generate should error.
+	tables := []introspect.Table{
+		{Schema: "public", Name: "_users_name"},
+		{Schema: "public", Name: "users", Columns: []introspect.Column{
+			{Name: "name", DataType: "text", OrdinalPos: 1},
+		}},
+	}
+	_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err == nil {
+		t.Fatal("expected error for field-vs-prior-table identifier collision, got nil")
+	}
+}
+
 func TestGenerateSingleTable(t *testing.T) {
 	tables := []introspect.Table{
 		{
