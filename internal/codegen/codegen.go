@@ -35,10 +35,13 @@ func Generate(tables []introspect.Table, cfg Config) ([]byte, error) {
 		return sorted[i].Name < sorted[j].Name
 	})
 
-	// Detect identifier collisions before rendering.
+	// Detect identifier collisions and blank identifiers before rendering.
 	tableIdents := make(map[string]string) // ident → original table name
 	for _, tbl := range sorted {
 		ident := toExported(tbl.Name)
+		if ident == "_" {
+			return nil, fmt.Errorf("table %q produces blank identifier %q; it cannot be referenced in Go", tbl.Name, ident)
+		}
 		if prev, ok := tableIdents[ident]; ok {
 			return nil, fmt.Errorf("tables %q and %q both produce identifier %q", prev, tbl.Name, ident)
 		}

@@ -146,6 +146,22 @@ func TestGenerateTableCollision(t *testing.T) {
 	}
 }
 
+func TestGenerateBlankIdentifierTable(t *testing.T) {
+	// A table named "_" (or any all-underscore name) produces toExported → "_",
+	// which is the Go blank identifier. var _ = NewTable("_") compiles but the
+	// value is discarded and the table can never be referenced. Generate should
+	// error rather than silently emit dead code.
+	for _, name := range []string{"_", "__", "___"} {
+		tables := []introspect.Table{
+			{Schema: "public", Name: name},
+		}
+		_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+		if err == nil {
+			t.Errorf("expected error for table %q producing blank identifier, got nil", name)
+		}
+	}
+}
+
 func TestGenerateColumnCollision(t *testing.T) {
 	// "my_field" and "my__field" both map to "MyField" — should error.
 	tables := []introspect.Table{

@@ -2,6 +2,36 @@
 
 ---
 
+# Changelog — Cycle 25
+
+## Who This Helps
+- **Stakeholder:** gosq users with pathological schema names
+- **Impact:** A table named `_` (or `__`, `___` — any name consisting entirely of underscores) previously generated `var _ = NewTable("_")`. The Go blank identifier silently discards the value; the table can never be referenced in user code. The file compiled without error but produced dead code. `Generate` now returns a clear error: `table "_" produces blank identifier "_"; it cannot be referenced in Go`.
+
+## Observed
+- `toExported("_")` returns `"_"` (via the empty-string guard added in cycle 6).
+- `var _ = NewTable("_")` is valid Go — it compiles and `go/format` accepts it — but the blank identifier discards the return value, making the declaration permanently unreachable.
+- The existing collision detection (cycle 23) establishes the pattern: when generated code would be functionally unusable, `Generate` should error with a message naming the problematic table.
+- Blank identifier tables are not caught by collision detection because `_` is not a normal identifier that can collide — two tables both producing `_` would silently generate two `var _ = ...` declarations (each valid individually) rather than a redeclaration error.
+
+## Applied
+- Added a blank identifier check in `Generate`: immediately after computing `ident := toExported(tbl.Name)`, returns an error if `ident == "_"`.
+- Added `TestGenerateBlankIdentifierTable` covering `"_"`, `"__"`, and `"___"` — all names that reduce to the blank identifier.
+- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (all pass)
+go vet ./...     — OK
+```
+
+## Next
+- `TestTableStructure` in `introspect_test.go` constructs a `Table` inline and asserts `len(Columns)` and `Columns[2].IsNullable`. It exercises zero code paths (no functions in `introspect` are called). A contributor reading it would assume the package has unit tests. Consider removing it or replacing it with a test that documents something real about the struct contract.
+- The project handles all known ASCII, UTF-8, and identifier-edge cases. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 24
 
 ## Who This Helps
