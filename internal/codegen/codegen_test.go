@@ -162,6 +162,25 @@ func TestGenerateBlankIdentifierTable(t *testing.T) {
 	}
 }
 
+func TestGenerateCrossTableFieldCollision(t *testing.T) {
+	// Table "a" with column "b_c" produces field var "A"+"BC" = "ABC".
+	// Table "a_b" with column "c" produces field var "AB"+"C" = "ABC".
+	// Table collision detection passes (A ≠ AB), within-table column detection
+	// passes (each table has one column), but the full field identifiers collide.
+	tables := []introspect.Table{
+		{Schema: "public", Name: "a", Columns: []introspect.Column{
+			{Name: "b_c", DataType: "text", OrdinalPos: 1},
+		}},
+		{Schema: "public", Name: "a_b", Columns: []introspect.Column{
+			{Name: "c", DataType: "text", OrdinalPos: 1},
+		}},
+	}
+	_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err == nil {
+		t.Fatal("expected error for cross-table field identifier collision, got nil")
+	}
+}
+
 func TestGenerateColumnCollision(t *testing.T) {
 	// "my_field" and "my__field" both map to "MyField" — should error.
 	tables := []introspect.Table{

@@ -36,7 +36,8 @@ func Generate(tables []introspect.Table, cfg Config) ([]byte, error) {
 	})
 
 	// Detect identifier collisions and blank identifiers before rendering.
-	tableIdents := make(map[string]string) // ident → original table name
+	tableIdents := make(map[string]string)  // ident → original table name
+	fieldIdents := make(map[string][2]string) // full field ident → [table, column]
 	for _, tbl := range sorted {
 		ident := toExported(tbl.Name)
 		if ident == "_" {
@@ -54,6 +55,12 @@ func Generate(tables []introspect.Table, cfg Config) ([]byte, error) {
 				return nil, fmt.Errorf("columns %q and %q in table %q both produce identifier %q", prev, col.Name, tbl.Name, colIdent)
 			}
 			colIdents[colIdent] = col.Name
+
+			fieldIdent := ident + colIdent
+			if prev, ok := fieldIdents[fieldIdent]; ok {
+				return nil, fmt.Errorf("field %q.%q and %q.%q both produce identifier %q", prev[0], prev[1], tbl.Name, col.Name, fieldIdent)
+			}
+			fieldIdents[fieldIdent] = [2]string{tbl.Name, col.Name}
 		}
 	}
 

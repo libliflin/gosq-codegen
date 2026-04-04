@@ -2,6 +2,34 @@
 
 ---
 
+# Changelog — Cycle 27
+
+## Who This Helps
+- **Stakeholder:** gosq users with schemas where table and column naming patterns interact
+- **Impact:** A cross-table field identifier collision (where two different table+column combinations produce the same Go variable name) now returns a clear error naming both sources: `field "a"."b_c" and "a_b"."c" both produce identifier "ABC"`. Before, the generated file compiled silently — until the user's own Go build failed with `ABC redeclared in this block`, pointing at a `DO NOT EDIT` file with no indication the schema was the cause.
+
+## Observed
+- Field variable names are `tableIdent + colIdent` (e.g. table `a_b` + column `c` → `"AB" + "C"` = `"ABC"`).
+- The existing collision detection checked table identifiers against each other and column identifiers within a single table — but not full field identifiers across tables.
+- A schema with table `a` + column `b_c` and table `a_b` + column `c` passes both existing checks (table idents differ: `A` ≠ `AB`; each table has only one column) yet both produce field variable `ABC`, causing a redeclaration error in the emitted file.
+
+## Applied
+- Added a `fieldIdents` map in the pre-render collision check that accumulates every full field identifier (`tableIdent + colIdent`) across all tables. Returns an error if any two table+column pairs produce the same full identifier.
+- Added `TestGenerateCrossTableFieldCollision` with the `a`/`b_c` + `a_b`/`c` case.
+- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (all pass)
+go vet ./...     — OK
+```
+
+## Next
+- The project handles all known correctness gaps. Further improvements should be driven by real user feedback — production schemas with unusual patterns, non-public schema names, or scale issues encountered in large databases.
+
+---
+
 # Changelog — Cycle 26
 
 ## Who This Helps
