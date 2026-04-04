@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 22
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** A user who passes `-pkg my-schema` (or any other invalid Go identifier like `-pkg 123abc` or `-pkg var`) now gets an immediate, clear error: `gosq-codegen: invalid package name "my-schema"`. Before, the error surfaced deep in the pipeline as a cryptic `formatting generated source: 1:9: expected 'STRING', found '-'` from `go/format`, with no indication that the package name was the problem.
-
-## Observed
-- `main.go` used `*pkg` as a Go package name without validating it at the flag-parsing boundary.
-- Invalid identifiers (containing dashes, starting with digits, or matching Go keywords like `var`) would reach `codegen.Generate`, produce syntactically invalid source, and fail in `format.Source` with a message that pointed at source positions rather than the flag.
-- `go/token.IsIdentifier` and `go/token.IsKeyword` are the standard library tools for this check.
-
-## Applied
-- Added validation of `-pkg` using `token.IsIdentifier` and `token.IsKeyword` immediately after flag parsing (before the DSN check).
-- Added `"go/token"` to the import list in `main.go`.
-- **File:** `main.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 21
 
 ## Who This Helps

@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -56,6 +57,11 @@ func main() {
 			fmt.Println("(devel)")
 		}
 		return
+	}
+
+	if !token.IsIdentifier(*pkg) || token.IsKeyword(*pkg) {
+		fmt.Fprintf(os.Stderr, "gosq-codegen: invalid package name %q\n", *pkg)
+		os.Exit(1)
 	}
 
 	if *dsn == "" {

@@ -1,0 +1,62 @@
+# Project Snapshot
+Generated: Sat Apr  4 12:58:01 EDT 2026
+
+## Git Status
+ M .lathe/state/cycle.json
+?? .lathe/state/history/cycle-020/
+
+## Recent Commits (last 10)
+027ba36 lathe: cycle 20
+5b70175 lathe: cycle 20
+f141e82 lathe: cycle 19
+450d277 lathe: cycle 18
+d3620e6 lathe: cycle 17
+248b1ba lathe: cycle 16
+6ed50ea lathe: cycle 16
+e787940 lathe: cycle 15
+60a7bfd lathe: cycle 14
+b049c89 lathe: cycle 13
+
+## Go Module
+module github.com/libliflin/gosq-codegen
+
+go 1.22
+
+## Build
+```
+OK — builds clean
+```
+
+## Tests
+```
+?   	github.com/libliflin/gosq-codegen	[no test files]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.308s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.186s
+```
+
+## Vet
+```
+OK — vet clean
+```
+
+## Packages
+github.com/libliflin/gosq-codegen
+github.com/libliflin/gosq-codegen/internal/codegen
+github.com/libliflin/gosq-codegen/internal/introspect
+
+## Go Files
+./internal/codegen/codegen_test.go
+./internal/codegen/codegen.go
+./internal/introspect/introspect_test.go
+./internal/introspect/introspect.go
+./main.go
+
+## TODOs
+(none)
+
+## Coverage
+```
+	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.171s	coverage: 97.8% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.294s	coverage: 0.0% of statements
+```
