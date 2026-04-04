@@ -2,33 +2,6 @@
 
 ---
 
-# Changelog — Cycle 10
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** Users with views in their schema no longer get spurious `NewTable`/`NewField` declarations for those views. Only base tables are emitted, which is what gosq users expect and need.
-
-## Observed
-- `information_schema.columns` includes columns from views as well as base tables.
-- A user with a view `v_active_orders` in their `public` schema would get `VActiveOrders = NewTable("v_active_orders")` in their generated file — a view that can't be used the same way as a table with gosq.
-- Previous cycle flagged this as the next highest-value change.
-
-## Applied
-- Added a `JOIN information_schema.tables` to the introspect query with `AND t.table_type = 'BASE TABLE'`.
-- **File:** `internal/introspect/introspect.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 9
 
 ## Who This Helps

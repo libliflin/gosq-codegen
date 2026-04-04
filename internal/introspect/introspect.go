@@ -29,10 +29,13 @@ type Column struct {
 // schema, sorted by table name with columns ordered by ordinal position.
 func Tables(db *sql.DB, schema string) ([]Table, error) {
 	const q = `
-SELECT table_name, column_name, data_type, is_nullable, ordinal_position
-FROM information_schema.columns
-WHERE table_schema = $1
-ORDER BY table_name, ordinal_position`
+SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.ordinal_position
+FROM information_schema.columns c
+JOIN information_schema.tables t
+  ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+WHERE c.table_schema = $1
+  AND t.table_type = 'BASE TABLE'
+ORDER BY c.table_name, c.ordinal_position`
 
 	rows, err := db.Query(q, schema)
 	if err != nil {
