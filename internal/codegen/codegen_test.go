@@ -162,6 +162,22 @@ func TestGenerateBlankIdentifierTable(t *testing.T) {
 	}
 }
 
+func TestGenerateTableFieldCollision(t *testing.T) {
+	// Table "users_id" produces table ident "UsersID".
+	// Table "users" with column "id" produces field ident "UsersID".
+	// Both would emit "var UsersID = ..." — a redeclaration error in the generated file.
+	tables := []introspect.Table{
+		{Schema: "public", Name: "users", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+		}},
+		{Schema: "public", Name: "users_id"},
+	}
+	_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err == nil {
+		t.Fatal("expected error for table-field identifier collision, got nil")
+	}
+}
+
 func TestGenerateCrossTableFieldCollision(t *testing.T) {
 	// Table "a" with column "b_c" produces field var "A"+"BC" = "ABC".
 	// Table "a_b" with column "c" produces field var "AB"+"C" = "ABC".

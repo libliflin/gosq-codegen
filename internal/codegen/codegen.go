@@ -46,6 +46,9 @@ func Generate(tables []introspect.Table, cfg Config) ([]byte, error) {
 		if prev, ok := tableIdents[ident]; ok {
 			return nil, fmt.Errorf("tables %q and %q both produce identifier %q", prev, tbl.Name, ident)
 		}
+		if prev, ok := fieldIdents[ident]; ok {
+			return nil, fmt.Errorf("table %q and field %q.%q both produce identifier %q", tbl.Name, prev[0], prev[1], ident)
+		}
 		tableIdents[ident] = tbl.Name
 
 		colIdents := make(map[string]string) // ident → original column name
@@ -59,6 +62,9 @@ func Generate(tables []introspect.Table, cfg Config) ([]byte, error) {
 			fieldIdent := ident + colIdent
 			if prev, ok := fieldIdents[fieldIdent]; ok {
 				return nil, fmt.Errorf("field %q.%q and %q.%q both produce identifier %q", prev[0], prev[1], tbl.Name, col.Name, fieldIdent)
+			}
+			if prevTable, ok := tableIdents[fieldIdent]; ok {
+				return nil, fmt.Errorf("field %q.%q and table %q both produce identifier %q", tbl.Name, col.Name, prevTable, fieldIdent)
 			}
 			fieldIdents[fieldIdent] = [2]string{tbl.Name, col.Name}
 		}

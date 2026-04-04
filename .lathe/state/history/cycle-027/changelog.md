@@ -2,38 +2,6 @@
 
 ---
 
-# Changelog — Cycle 28
-
-## Who This Helps
-- **Stakeholder:** gosq users with schemas where a table name and a table+column combination produce the same Go identifier
-- **Impact:** A table named `users_id` alongside a table `users` with column `id` would both generate `var UsersID = ...` — a redeclaration error that surfaces in the user's Go build, pointing at a `DO NOT EDIT` file with no indication the schema is the cause. `Generate` now catches this and returns a descriptive error: `table "users_id" and field "users"."id" both produce identifier "UsersID"`.
-
-## Observed
-- The existing collision detection checked table-vs-table and field-vs-field, but not table-vs-field.
-- Table var names (`TableIdent`) and field var names (`TableIdent + ColIdent`) live in the same Go package. A short table name that matches a longer table name plus a column name produces a redeclaration error in the generated file — silently, since `go/format` doesn't check declarations.
-- Example: table `users_id` → `UsersID`; table `users` + column `id` → `UsersID`. Both emit `var UsersID = ...` in the same file.
-- The production pattern is realistic: schemas commonly have both a table `users` (with an `id` column) and a table `users_roles` or `user_id` as a lookup/junction table.
-
-## Applied
-- Added two checks in `Generate`'s collision detection loop:
-  1. When computing a table identifier: check if it already exists in `fieldIdents` (field from a previously-processed table produces the same name as this table).
-  2. When computing a field identifier: check if it already exists in `tableIdents` (a table processed earlier produces the same name as this field).
-- Added `TestGenerateTableFieldCollision` with the `users_id` + `users`/`id` case.
-- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The collision detection now covers all identifier-space interactions: table-table, column-column (within a table), field-field (across tables), and table-field. The known correctness gaps are closed.
-- Further improvements should be driven by real user feedback — production schemas with unusual patterns, non-public schema names, or scale issues encountered in large databases.
-
----
-
 # Changelog — Cycle 27
 
 ## Who This Helps
