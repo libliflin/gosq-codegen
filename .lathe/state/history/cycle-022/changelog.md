@@ -2,36 +2,6 @@
 
 ---
 
-# Changelog — Cycle 23
-
-## Who This Helps
-- **Stakeholder:** gosq users with unusual schemas
-- **Impact:** If two table names (e.g., `user_data` and `user__data`) or two column names within a table produce the same Go identifier after conversion, `Generate` now returns a clear error: `tables "user_data" and "user__data" both produce identifier "UserData"`. Before, the generated file contained duplicate variable declarations and failed to compile with a cryptic Go error pointing into the generated code — no indication the schema was the cause.
-
-## Observed
-- `toExported` strips consecutive underscores (empty parts are skipped), so `user_data` and `user__data` both produce `UserData`.
-- `Generate` had no duplicate-identifier check; it would silently emit `var UserData = NewTable("user_data")` twice, producing a file that fails with `UserData redeclared in this block`.
-- The user's only signal was a Go compiler error in a file marked `DO NOT EDIT`, with no pointer to the schema naming conflict.
-
-## Applied
-- Added pre-render collision detection in `Generate`: after sorting, checks all table identifiers for duplicates across the file, and all column identifiers for duplicates within each table.
-- Returns a descriptive error naming both conflicting originals and the identifier they produce.
-- Added `TestGenerateTableCollision` and `TestGenerateColumnCollision` to `codegen_test.go`.
-- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-coverage: 98.2% (was 97.8%)
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 22
 
 ## Who This Helps

@@ -134,6 +134,36 @@ func TestGenerateMultipleTablesOrdered(t *testing.T) {
 	}
 }
 
+func TestGenerateTableCollision(t *testing.T) {
+	// "user_data" and "user__data" both map to "UserData" — should error.
+	tables := []introspect.Table{
+		{Schema: "public", Name: "user_data"},
+		{Schema: "public", Name: "user__data"},
+	}
+	_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err == nil {
+		t.Fatal("expected error for colliding table identifiers, got nil")
+	}
+}
+
+func TestGenerateColumnCollision(t *testing.T) {
+	// "my_field" and "my__field" both map to "MyField" — should error.
+	tables := []introspect.Table{
+		{
+			Schema: "public",
+			Name:   "items",
+			Columns: []introspect.Column{
+				{Name: "my_field", DataType: "text", OrdinalPos: 1},
+				{Name: "my__field", DataType: "text", OrdinalPos: 2},
+			},
+		},
+	}
+	_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err == nil {
+		t.Fatal("expected error for colliding column identifiers, got nil")
+	}
+}
+
 func TestToExported(t *testing.T) {
 	tests := []struct {
 		in   string
