@@ -39,6 +39,28 @@ func TestGenerateDotImportFalse(t *testing.T) {
 	}
 }
 
+func TestGenerateDigitLeadingColumn(t *testing.T) {
+	tables := []introspect.Table{
+		{
+			Schema: "public",
+			Name:   "accounts",
+			Columns: []introspect.Column{
+				{Name: "2fa_enabled", DataType: "boolean", IsNullable: false, OrdinalPos: 1},
+			},
+		},
+	}
+
+	got, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "package schema\n\nimport . \"github.com/libliflin/gosq\"\n\nvar Accounts = NewTable(\"accounts\")\n\nvar (\n\tAccounts_2faEnabled = NewField(\"accounts.2fa_enabled\")\n)\n"
+	if string(got) != want {
+		t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestGenerateSingleTable(t *testing.T) {
 	tables := []introspect.Table{
 		{

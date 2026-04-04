@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 5
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** Any schema with a column starting with a digit (e.g., `2fa_enabled`) no longer causes `Generate` to return a cryptic `format.Source` error. The generated identifier is prefixed with `_`, producing valid Go (`Accounts_2faEnabled`).
-
-## Observed
-- `toExported("2fa_enabled")` returned `"2faEnabled"` — a digit-leading string that `go/format` rejects as an invalid identifier.
-- Previous cycle flagged this as the next highest-value change.
-
-## Applied
-- Added digit-prefix guard to `toExported`: if the result starts with `'0'–'9'`, prepend `_`.
-- Added `TestGenerateDigitLeadingColumn` to verify the full `Generate` output for a digit-leading column name.
-- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The `introspect` package shows 0.0% test coverage because its only function (`Tables`) requires a live DB. The struct-construction test exercises no code paths. Consider whether any non-DB helper logic should be extracted and tested (e.g., ordinal-sort logic), or accept 0% coverage as correct for a DB-dependent package.
-- Column names that are Go reserved words (`type`, `func`, `var`, etc.) would generate invalid identifiers. Add a reserved-word suffix guard (`_`) and a test.
-
----
-
 # Changelog — Cycle 4
 
 ## Who This Helps
