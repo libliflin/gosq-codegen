@@ -101,7 +101,8 @@ var goInitialisms = map[string]string{
 }
 
 // toExported converts a snake_case database identifier to an exported Go identifier.
-// If the result would start with a digit (not a valid Go identifier), it is prefixed with "_".
+// If the result would start with a digit, it is prefixed with "_".
+// If the result would be empty (e.g. all underscores), it is replaced with "_".
 func toExported(name string) string {
 	parts := strings.Split(name, "_")
 	var b strings.Builder
@@ -116,7 +117,10 @@ func toExported(name string) string {
 		}
 	}
 	result := b.String()
-	if len(result) > 0 && result[0] >= '0' && result[0] <= '9' {
+	if result == "" {
+		return "_"
+	}
+	if result[0] >= '0' && result[0] <= '9' {
 		return "_" + result
 	}
 	return result

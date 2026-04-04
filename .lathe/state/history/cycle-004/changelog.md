@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 6
-
-## Who This Helps
-- **Stakeholder:** gosq users
-- **Impact:** A column named entirely with underscores (e.g. `___`) no longer causes `Generate` to return a cryptic `format.Source` error. The fallback identifier `_` is emitted, keeping the generated file compilable.
-
-## Observed
-- Previous cycle's "Next" flagged Go reserved words as the concern. On inspection, `toExported` always capitalizes, so no Go keyword (all lowercase) can ever be produced. The real gap was the all-underscore case: every part is empty, `strings.Builder` produces `""`, and `""` is an invalid Go identifier that fails `format.Source`.
-- Evidence: `toExported("___")` returned `""` with no guard.
-
-## Applied
-- Added empty-result guard to `toExported`: if `result == ""`, return `"_"`.
-- Added `TestGenerateAllUnderscoreColumn` verifying full `Generate` output for an all-underscore column name.
-- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The `introspect` package has 0.0% test coverage. Its only exported function (`Tables`) requires a live DB — 0% is correct for that path. However, there is no helper logic that could be extracted and tested in isolation. Coverage is a non-issue here; accept it.
-- The README still says "planned usage" and shows a command that previously produced `exit status 1`. Update it to reflect that the tool is now functional, show the real usage, and give users a working `//go:generate` example.
-
----
-
 # Changelog — Cycle 5
 
 ## Who This Helps
