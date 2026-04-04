@@ -134,6 +134,58 @@ func TestGenerateMultipleTablesOrdered(t *testing.T) {
 	}
 }
 
+func TestToExported(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		// Single words
+		{"name", "Name"},
+		{"id", "ID"},
+		{"url", "URL"},
+		{"uri", "URI"},
+		{"uuid", "UUID"},
+		{"ip", "IP"},
+		{"api", "API"},
+		{"sql", "SQL"},
+		{"json", "JSON"},
+		{"xml", "XML"},
+		{"rpc", "RPC"},
+		{"tls", "TLS"},
+		{"ttl", "TTL"},
+		{"http", "HTTP"},
+		{"https", "HTTPS"},
+		{"uid", "UID"},
+		{"io", "IO"},
+		{"cpu", "CPU"},
+
+		// Compound snake_case
+		{"user_id", "UserID"},
+		{"url_params", "URLParams"},
+		{"created_at", "CreatedAt"},
+		{"updated_at", "UpdatedAt"},
+		{"http_status_code", "HTTPStatusCode"},
+		{"api_key", "APIKey"},
+		{"oauth_token", "OauthToken"},
+
+		// Edge cases
+		{"2fa_enabled", "_2faEnabled"},
+		{"___", "_"},
+		{"", "_"},
+		{"_leading", "Leading"},
+		{"trailing_", "Trailing"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			got := toExported(tc.in)
+			if got != tc.want {
+				t.Errorf("toExported(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestGenerateSingleTable(t *testing.T) {
 	tables := []introspect.Table{
 		{

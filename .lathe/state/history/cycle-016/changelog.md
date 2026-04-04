@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 17
-
-## Who This Helps
-- **Stakeholder:** contributors
-- **Impact:** The `toExported` name-conversion function is now directly tested across 31 cases. Previously it was covered only indirectly through `Generate`. A contributor adding a new initialism, changing the underscore-stripping logic, or handling a new edge case now has an explicit test suite to run against — and knows exactly what the expected behavior is for each input pattern.
-
-## Observed
-- `toExported` is the function that every generated identifier flows through. Every user-visible variable name (`UsersID`, `HTTPStatusCode`, `OauthToken`) is produced by it.
-- The function was covered only via `Generate` end-to-end tests, which test a small subset of inputs. A bug in initialism handling (e.g., `"url"` → `"Url"` instead of `"URL"`) would only be caught if that specific initialism appeared in an existing `Generate` test.
-- No test explicitly documented the behavior for leading/trailing underscores, compound patterns like `http_status_code`, or the empty-string guard.
-
-## Applied
-- Added `TestToExported` to `codegen_test.go`: 31 table-driven subtests covering all 17 initialisms, common snake_case patterns, and all edge cases (digit-leading, all-underscores, empty string, leading/trailing underscores).
-- **File:** `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass, 31 new subtests)
-go vet ./...     — OK
-coverage: 97.8% (unchanged)
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 16
 
 ## Who This Helps
