@@ -46,7 +46,7 @@ echo ""
 # Tests
 echo "## Tests"
 echo '```'
-_to 60 go test ./... -count=1 2>&1 || true
+_to 60 go test -count=1 ./... 2>&1 || true
 echo '```'
 echo ""
 
@@ -75,5 +75,5 @@ echo ""
 # Test coverage (quick, no output files)
 echo "## Coverage"
 echo '```'
-_to 60 go test ./... -cover 2>&1 | grep -E 'coverage:|FAIL|ok' || echo "(no coverage data)"
+_to 60 go test -count=1 ./... -cover 2>&1 | grep -E 'coverage:|FAIL|ok' || echo "(no coverage data)"
 echo '```'
