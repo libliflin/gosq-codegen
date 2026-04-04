@@ -17,6 +17,28 @@ func TestGenerateEmpty(t *testing.T) {
 	}
 }
 
+func TestGenerateDotImportFalse(t *testing.T) {
+	tables := []introspect.Table{
+		{
+			Schema: "public",
+			Name:   "users",
+			Columns: []introspect.Column{
+				{Name: "id", DataType: "integer", IsNullable: false, OrdinalPos: 1},
+			},
+		},
+	}
+
+	got, err := Generate(tables, Config{Package: "schema", DotImport: false})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "package schema\n\nimport \"github.com/libliflin/gosq\"\n\nvar Users = gosq.NewTable(\"users\")\n\nvar (\n\tUsersID = gosq.NewField(\"users.id\")\n)\n"
+	if string(got) != want {
+		t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestGenerateSingleTable(t *testing.T) {
 	tables := []introspect.Table{
 		{

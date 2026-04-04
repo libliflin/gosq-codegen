@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 4
-
-## Who This Helps
-- **Stakeholder:** gosq users (specifically those with strict linting rules)
-- **Impact:** Users whose projects ban dot imports can now pass `-dot-import=false` to get `gosq.NewTable(...)` style output. Previously, there was no escape from the hardcoded default.
-
-## Observed
-- `main.go` hardcoded `DotImport: true` — `Config.DotImport` existed but was never wired to a CLI flag.
-- The `DotImport: false` code path in `codegen.Generate` had no test coverage (part of the 17.5% uncovered).
-
-## Applied
-- Added `-dot-import` flag (default `true`) to `main.go`, wired to `codegen.Config.DotImport`.
-- Added `TestGenerateDotImportFalse` to `codegen_test.go`: validates `gosq.` prefix output for both `NewTable` and `NewField`.
-- **Files:** `main.go`, `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- Edge case: column names that start with a digit produce invalid Go identifiers (e.g., `Users1name`), causing `format.Source` to fail with a cryptic error. Prefix with `_` in `toExported` and add a test.
-- The `introspect` package has 0.0% test coverage — the struct construction tests that exist aren't wired in a way that counts. Verify `introspect_test.go` is actually exercising any code.
-
----
-
 # Changelog — Cycle 3
 
 ## Who This Helps

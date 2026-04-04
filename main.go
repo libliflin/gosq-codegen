@@ -38,6 +38,7 @@ func main() {
 	out := flag.String("out", "schema/", "output directory")
 	pkg := flag.String("pkg", "schema", "Go package name for generated file")
 	schema := flag.String("schema", "public", "PostgreSQL schema to introspect")
+	dotImport := flag.Bool("dot-import", true, "use dot-import for gosq (import . \"github.com/libliflin/gosq\")")
 	flag.Parse()
 
 	if *dsn == "" {
@@ -59,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	src, err := codegen.Generate(tables, codegen.Config{Package: *pkg, DotImport: true})
+	src, err := codegen.Generate(tables, codegen.Config{Package: *pkg, DotImport: *dotImport})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: generate: %v\n", err)
 		os.Exit(1)
