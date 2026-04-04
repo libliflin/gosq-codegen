@@ -44,6 +44,7 @@ This writes `schema/schema.go` into your project (named after the `-pkg` value).
 | `-pkg` | `schema` | Go package name for generated file |
 | `-schema` | `public` | PostgreSQL schema to introspect |
 | `-dot-import` | `true` | Use dot-import (`import . "github.com/libliflin/gosq"`) |
+| `-version` | | Print version and exit |
 
 ### Example output
 

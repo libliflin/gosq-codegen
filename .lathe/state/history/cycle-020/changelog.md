@@ -2,32 +2,6 @@
 
 ---
 
-# Changelog — Cycle 21
-
-## Who This Helps
-- **Stakeholder:** gosq users (first-time discoverers and bug reporters)
-- **Impact:** The README flags table now lists all CLI flags. A user reading the docs can discover `-version` exists; before, it was only visible via `-help`.
-
-## Observed
-- Cycle 20 added `-version` to `main.go` but did not update the README flags table.
-- A user reading the README had no indication the flag existed.
-
-## Applied
-- Added `-version` row to the flags table in `README.md`.
-- **File:** `README.md`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and correct for the core use case. Future improvements should be driven by real user feedback: non-`public` schema support, multiple output files, or schema edge cases encountered in production databases.
-
----
-
 # Changelog — Cycle 20
 
 ## Who This Helps
