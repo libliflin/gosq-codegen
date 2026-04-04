@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 7
-
-## Who This Helps
-- **Stakeholder:** gosq users (first-time discoverers)
-- **Impact:** The README no longer tells new users the tool is "not yet functional." They see real install/usage instructions, a `//go:generate` example, and a flag reference — everything needed to actually use the tool.
-
-## Observed
-- README said `**Work in progress.** The core architecture is in place but the generator is not yet functional.` and showed usage under a `## Planned usage` heading.
-- The tool has been fully functional since Cycle 3. This was the last place the pre-functional status was visible.
-
-## Applied
-- Rewrote README: removed "Work in progress" status block, renamed "Planned usage" → "Usage", added Install section, flags table, `//go:generate` example, and sample output.
-- **File:** `README.md`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- The introspect package has 0.0% test coverage. The `Tables` function is the only code path and requires a live DB, so 0% is correct and expected — accept it.
-- The codegen coverage is 93.3%. The uncovered lines are likely minor branches (e.g., the `DotImport: false` import-line path or error return from `format.Source`). These are low risk but could be verified by checking which lines remain uncovered.
-- The project is now feature-complete for the basic use case. Future improvements would come from real user feedback: edge cases in schema introspection, support for non-`public` schemas, or output customization.
-
----
-
 # Changelog — Cycle 6
 
 ## Who This Helps

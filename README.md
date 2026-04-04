@@ -15,17 +15,53 @@ var UsersEmail = NewField("users.email")
 
 Point `gosq-codegen` at your database and it generates these declarations for every table and column automatically.
 
-## Status
-
-**Work in progress.** The core architecture is in place but the generator is not yet functional.
-
-## Planned usage
+## Install
 
 ```bash
 go install github.com/libliflin/gosq-codegen@latest
+```
 
+## Usage
+
+```bash
 gosq-codegen -dsn "postgres://user:pass@localhost:5432/mydb" -out schema/
 ```
+
+This writes `schema/schema.go` into your project. Add it to version control and regenerate whenever your schema changes.
+
+### go:generate
+
+```go
+//go:generate gosq-codegen -dsn $DATABASE_URL -out schema/
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-dsn` | *(required)* | PostgreSQL connection string |
+| `-out` | `schema/` | Output directory |
+| `-pkg` | `schema` | Go package name for generated file |
+| `-schema` | `public` | PostgreSQL schema to introspect |
+| `-dot-import` | `true` | Use dot-import (`import . "github.com/libliflin/gosq"`) |
+
+### Example output
+
+```go
+package schema
+
+import . "github.com/libliflin/gosq"
+
+var Users = NewTable("users")
+
+var (
+	UsersID    = NewField("users.id")
+	UsersName  = NewField("users.name")
+	UsersEmail = NewField("users.email")
+)
+```
+
+With `-dot-import=false`, references are prefixed: `gosq.NewTable(...)`, `gosq.NewField(...)`.
 
 ## Architecture
 
