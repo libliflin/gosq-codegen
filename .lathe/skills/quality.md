@@ -11,67 +11,64 @@ This file exists to answer: what does "quality" mean specifically for this proje
 1. Compile without errors in a real Go module that imports gosq
 2. Be identical to what `gofmt` would produce
 
-The way to guarantee (2) is to pipe the output through `go/format` before returning it:
-
-```go
-import "go/format"
-
-formatted, err := format.Source(src)
-if err != nil {
-    return nil, fmt.Errorf("formatting generated source: %w", err)
-}
-return formatted, nil
-```
-
-If `format.Source` returns an error, it means the generated source has a syntax error. Treat that as a bug in `Generate`, not in the caller.
+This is already guaranteed: `Generate` pipes output through `go/format` before returning it. Never remove this step.
 
 ---
 
 ## Determinism is not optional
 
-Generated files live in version control. If running gosq-codegen twice against the same schema produces different output, users get spurious diffs on every run. This destroys trust.
+Generated files live in version control. If running gosq-codegen twice against the same schema produces different output, users get spurious diffs on every run. This destroys trust fast.
 
 **Required behavior:** Same `[]introspect.Table` input + same `Config` → identical `[]byte` output, always.
 
-**How to achieve it:** Sort tables by name (alphabetically) before rendering. Within each table, render columns in `OrdinalPos` order (as returned by `information_schema.columns`). Don't use map iteration order anywhere in the rendering path.
+**How it's achieved:** Tables are sorted by name before rendering. Columns are rendered in `OrdinalPos` order (as returned by `information_schema.columns`). No map iteration order anywhere in the rendering path. This is already correct — don't change it.
 
 ---
 
-## Identifier naming
+## Identifier naming: stability beats perfection
 
-Generated variable names are derived from table and column names. PostgreSQL names are typically `snake_case`. Go exported identifiers are `PascalCase`. The conversion must be consistent:
+Generated variable names derive from table and column names. PostgreSQL names are typically `snake_case`. Go exported identifiers are `PascalCase` with initialisms.
 
-- `users` → `Users`
-- `user_id` → `UserID` (note: "ID" not "Id" — follow Go initialisms: `ID`, `URL`, `HTTP`, `SQL`)
-- `created_at` → `CreatedAt`
-- `oauth_token` → `OauthToken` (no initialism for "oauth" unless explicitly listed)
+The current `toExported` function is:
+- Correct for all common ASCII snake_case patterns (`users.id` → `UsersID`, `orders.created_at` → `OrdersCreatedAt`)
+- Tested against 31 cases in `TestToExported`
+- Stable — changing it renames variables in users' codebases
 
-Use `golang.org/x/text/cases` or a simple manual split-on-underscore approach. Whichever you choose, be consistent across tables and columns.
+**When NOT to change `toExported`:** Aesthetic disagreements, speculative coverage, or theoretical correctness for inputs that don't appear in real schemas.
 
-**Edge cases to be aware of** (handle them when they arise, not prematurely):
-- Column names that start with a digit (not valid Go identifiers — prefix with `_` or handle explicitly)
-- Column names that are Go reserved words (`type`, `func`, etc.)
-- Column names with non-ASCII characters
+**When to change `toExported`:** A user reports that a real column name produces a wrong or non-compilable identifier. Fix it, test it, document it as a naming change.
+
+**Known issue: byte-slicing on non-ASCII input.** `toExported` capitalizes using `part[:1]` — byte-slicing, not rune-slicing. For any column name starting with a multi-byte UTF-8 character (e.g., accented characters, non-Latin scripts), `part[:1]` would be an incomplete rune, producing a broken string. This would likely cause `go/format` to return an error with a message that doesn't point to the schema column as the cause. This has not been tested. If this is ever investigated, the fix is to convert to `[]rune` before slicing: `string([]rune(part)[:1])`, and add `TestToExported` cases covering non-ASCII inputs.
+
+**The current initialism list:** `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`. Adding a new initialism is a breaking change for users who have the corresponding column names — document it.
 
 ---
 
 ## Error messages must say *what* failed
 
-When `introspect` fails to query a table, or when `codegen` fails to format output, the error must include enough context to locate the problem:
+Error messages should name the specific table or column that caused the failure:
 
 ```go
-// Good
-return fmt.Errorf("introspect table %q: %w", tableName, err)
+// Good — names the problem
+return nil, fmt.Errorf("tables %q and %q both produce identifier %q", prev, tbl.Name, ident)
 
 // Not helpful
-return fmt.Errorf("query failed: %w", err)
+return nil, fmt.Errorf("identifier collision detected")
 ```
+
+`main.go` prefixes errors with `"gosq-codegen: "` and the operation name (e.g., `"gosq-codegen: introspect: "`). Internal packages (`introspect`, `codegen`) should not include their own package name in error strings — callers add context via wrapping. This is already correct; maintain the pattern.
 
 ---
 
 ## Keep `internal/` internal
 
-`introspect` and `codegen` are `internal/` packages. They are not part of any public API. Don't add exported symbols "just in case" — only export what `main.go` (or tests) actually uses. The bar for adding an exported function to an internal package is: does something outside this package need to call it right now?
+`introspect` and `codegen` are `internal/` packages. They are not part of any public API. Only export what `main.go` (or tests) actually uses. The current exported surface:
+- `introspect.Table`, `introspect.Column` — needed by codegen
+- `introspect.Tables` — called by main
+- `codegen.Config` — passed by main
+- `codegen.Generate` — called by main
+
+Don't add exported symbols without a concrete caller.
 
 ---
 
@@ -91,3 +88,15 @@ staticcheck ./...
 ```
 
 Don't suppress vet or staticcheck warnings with `//nolint` or blank identifiers unless the warning is provably a false positive and you document why.
+
+---
+
+## The `// Code generated` header
+
+Every generated file begins with:
+
+```
+// Code generated by gosq-codegen; DO NOT EDIT.
+```
+
+This is the Go convention (per `cmd/go` documentation). Many tools — linters, editors, code review — use it to suppress warnings for machine-generated files. Never remove it from `Generate`.
