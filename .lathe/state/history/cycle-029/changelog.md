@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 30
-
-## Who This Helps
-- **Stakeholder:** gosq users with schemas containing multiple all-underscore column names
-- **Impact:** A table with columns `_` and `__` both produce colIdent `"_"` after `toExported`, yielding identical full field identifiers `Items_` and `Items_`. Before this test, the collision detection covered this case in code but it had never been exercised — a contributor modifying the blank-identifier or empty-string guard in `toExported` could have broken it silently. The test makes the contract explicit: two columns that collapse to the same colIdent are caught before rendering.
-
-## Observed
-- `TestGenerateBlankColumn` (cycle 30) documented that column `_` → `Items_` succeeds in isolation.
-- No test verified that a SECOND all-underscore column in the same table triggers the column collision detection.
-- `toExported("_")` = `"_"` (all underscores → empty string → `"_"` guard). `toExported("__")` = `"_"` (same path). Both produce colIdent `"_"`, so full field idents `Items_` and `Items_` collide.
-- The existing `colIdents` map check in `Generate` catches this on the second column, but the specific `_`/`__` case was not under test.
-
-## Applied
-- Added `TestGenerateMultiUnderscoreColumnCollision`: table `items` with columns `_` and `__`. Asserts `Generate` returns a non-nil error.
-- **File:** `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass)
-go vet ./...     — OK
-```
-
-## Next
-- All known correctness and edge-case gaps are covered. Further improvements should be driven by real user feedback — production schemas with non-public schema names, unusual column naming conventions, or scale issues beyond 17 tables.
-
----
-
 # Changelog — Cycle 29
 
 ## Who This Helps

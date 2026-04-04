@@ -239,6 +239,25 @@ func TestGenerateColumnCollision(t *testing.T) {
 	}
 }
 
+func TestGenerateMultiUnderscoreColumnCollision(t *testing.T) {
+	// "_" and "__" both produce toExported → "_", so both map to colIdent "_".
+	// Full field idents "Items_" and "Items_" collide. Generate should error.
+	tables := []introspect.Table{
+		{
+			Schema: "public",
+			Name:   "items",
+			Columns: []introspect.Column{
+				{Name: "_", DataType: "text", OrdinalPos: 1},
+				{Name: "__", DataType: "text", OrdinalPos: 2},
+			},
+		},
+	}
+	_, err := Generate(tables, Config{Package: "schema", DotImport: true})
+	if err == nil {
+		t.Fatal("expected error for columns _ and __ both producing identifier _, got nil")
+	}
+}
+
 func TestToExported(t *testing.T) {
 	tests := []struct {
 		in   string
