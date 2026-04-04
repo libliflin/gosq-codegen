@@ -2,35 +2,6 @@
 
 ---
 
-# Changelog — Cycle 32
-
-## Who This Helps
-- **Stakeholder:** contributors and gosq users investigating what identifier their column name will produce
-- **Impact:** `TestToExported` now documents two naming patterns that real production databases commonly use but were previously untested: consecutive initialisations (`api_id` → `APIID`, `oauth_api_url` → `OauthAPIURL`) and numeric version segments (`order_v2` → `OrderV2`, `api_v2` → `APIV2`). A contributor changing initialism handling would now see these cases fail immediately. A user wondering what `client_ip` or `max_ttl` produces has a reference.
-
-## Observed
-- The testing doc explicitly called out "compound initialisations (`oauth_api_url_params`)" and "numeric segments (`order_v2`, `segment_123_data`)" as patterns not covered in `TestToExported`.
-- `TestGenerateProductionScale` exercises `HTTPRequestsURLPath` (two initialisations in a full `Generate` call), but `TestToExported` had no cases with two consecutive initialisations or numeric version segments.
-- A contributor modifying the initialism loop could break `api_id` → `APIID` without any test failing.
-
-## Applied
-- Added 11 subtests to `TestToExported` (43 total, was 32):
-  - Consecutive initialisations: `api_id`, `url_id`, `user_uuid`, `client_ip`, `max_ttl`, `oauth_api_url`, `http_api_key`
-  - Numeric version segments: `order_v2`, `segment_123_data`, `api_v2`
-- **File:** `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (all pass, 43 subtests in TestToExported)
-go vet ./...     — OK
-```
-
-## Next
-- All known naming patterns, edge cases, and collision paths are covered. The tool is solid. Further improvements should be driven by real user feedback — production schemas with non-public schema names, unusual column naming conventions, or scale issues beyond 17 tables.
-
----
-
 # Changelog — Cycle 31
 
 ## Who This Helps

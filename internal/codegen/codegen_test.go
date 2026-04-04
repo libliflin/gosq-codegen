@@ -300,6 +300,20 @@ func TestToExported(t *testing.T) {
 		{"_leading", "Leading"},
 		{"trailing_", "Trailing"},
 
+		// Consecutive initialisms
+		{"api_id", "APIID"},
+		{"url_id", "URLID"},
+		{"user_uuid", "UserUUID"},
+		{"client_ip", "ClientIP"},
+		{"max_ttl", "MaxTTL"},
+		{"oauth_api_url", "OauthAPIURL"},
+		{"http_api_key", "HTTPAPIKey"},
+
+		// Numeric version segments
+		{"order_v2", "OrderV2"},
+		{"segment_123_data", "Segment123Data"},
+		{"api_v2", "APIV2"},
+
 		// Non-ASCII: column starting with a multi-byte UTF-8 character
 		{"éclat", "Éclat"},
 	}
