@@ -1,12 +1,9 @@
 # Project Snapshot
-Generated: Sat Apr  4 12:35:44 EDT 2026
+Generated: Sat Apr  4 12:33:14 EDT 2026
 
 ## Git Status
- M .lathe/state/changelog.md
  M .lathe/state/cycle.json
- M internal/introspect/introspect.go
 ?? .lathe/state/history/cycle-011/
-?? .lathe/state/history/cycle-012/
 
 ## Recent Commits (last 10)
 7ad0a87 lathe: cycle 11
@@ -33,8 +30,8 @@ OK — builds clean
 ## Tests
 ```
 ?   	github.com/libliflin/gosq-codegen	[no test files]
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.172s
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.292s
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.306s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.175s
 ```
 
 ## Vet
@@ -60,6 +57,6 @@ github.com/libliflin/gosq-codegen/internal/introspect
 ## Coverage
 ```
 	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.303s	coverage: 97.8% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.172s	coverage: 0.0% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.182s	coverage: 97.8% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.309s	coverage: 0.0% of statements
 ```
