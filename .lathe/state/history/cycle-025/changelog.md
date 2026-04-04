@@ -2,36 +2,6 @@
 
 ---
 
-# Changelog — Cycle 26
-
-## Who This Helps
-- **Stakeholder:** contributors
-- **Impact:** A contributor reading `internal/introspect/introspect_test.go` no longer sees a test that implies the package has unit tests. The removed test constructed a `Table` struct inline and asserted `len(Columns)` and `Columns[2].IsNullable` — testing Go's struct literal syntax, not any code in the package. Its presence created a false expectation. The package now honestly reflects its test status: `Tables` requires a live database and has 0% automated coverage, which is correct and expected.
-
-## Observed
-- `TestTableStructure` called no function in the `introspect` package. It built a `Table` value directly and asserted things the Go compiler already guarantees.
-- The snapshot showed `coverage: 0.0% of statements` for `introspect` — the test had zero effect on this number.
-- A contributor seeing a `_test.go` file with a passing test would reasonably assume something was being tested. Nothing was.
-- Cycle 25 identified this as the next action: "Consider removing it or replacing it with a test that documents something real about the struct contract."
-- There is nothing real to document: `Table` and `Column` are pure data types with no behavior. The only logic lives in `Tables`, which requires a live DB.
-
-## Applied
-- Removed `TestTableStructure` and the `"testing"` import from `internal/introspect/introspect_test.go`.
-- The file now contains only `package introspect`, honestly declaring the package without pretending it has testable logic.
-- **File:** `internal/introspect/introspect_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (introspect: no tests to run)
-go vet ./...     — OK
-```
-
-## Next
-- The project is stable and well-tested for all known edge cases. Further improvements should be driven by real user feedback — production schemas with unusual patterns, non-public schema names, or scale issues encountered in large databases.
-
----
-
 # Changelog — Cycle 25
 
 ## Who This Helps
