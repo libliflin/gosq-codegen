@@ -204,6 +204,9 @@ func TestToExported(t *testing.T) {
 		{"", "_"},
 		{"_leading", "Leading"},
 		{"trailing_", "Trailing"},
+
+		// Non-ASCII: column starting with a multi-byte UTF-8 character
+		{"éclat", "Éclat"},
 	}
 
 	for _, tc := range tests {

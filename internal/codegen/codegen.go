@@ -132,7 +132,8 @@ func toExported(name string) string {
 		if upper, ok := goInitialisms[strings.ToLower(part)]; ok {
 			b.WriteString(upper)
 		} else {
-			b.WriteString(strings.ToUpper(part[:1]) + part[1:])
+			runes := []rune(part)
+			b.WriteString(strings.ToUpper(string(runes[:1])) + string(runes[1:]))
 		}
 	}
 	result := b.String()

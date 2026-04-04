@@ -2,6 +2,37 @@
 
 ---
 
+# Changelog — Cycle 24
+
+## Who This Helps
+- **Stakeholder:** gosq users with non-ASCII column names in their Postgres schema
+- **Impact:** A column name starting with a multi-byte UTF-8 character (e.g. `éclat`, `ñoño`, `über`) no longer causes `Generate` to return a cryptic `formatting generated source: ...` error. Before, `toExported` byte-sliced the first character of each word (`part[:1]`), passing an incomplete rune to `strings.ToUpper`. `ToUpper` replaced the invalid byte with U+FFFD (3 bytes), then the remaining bytes of the original rune were prepended to the rest of the word — producing invalid UTF-8. `go/format` failed attempting to parse the malformed source, with no indication the schema column was the cause. After the fix, the first rune is correctly uppercased: `éclat` → `Éclat`.
+
+## Observed
+- `toExported` capitalized the first letter of each word part with `strings.ToUpper(part[:1]) + part[1:]` — byte-slicing, not rune-slicing.
+- For `"éclat"`: `part[:1]` = `"\xc3"` (first byte of the 2-byte UTF-8 sequence for `é`). `strings.ToUpper("\xc3")` = `"<U+FFFD>"` (3 bytes). Concatenated with `"\xa9clat"` (rest of the string), the result was `"\xef\xbf\xbd\xa9clat"` — invalid UTF-8.
+- `go/format` rejects invalid UTF-8 source; error message pointed at source positions, not the column name.
+- Verified with a standalone Go program: `ToUpper(part[:1])` produces `"<U+FFFD>"` and the recombined string fails `isValidUTF8`.
+
+## Applied
+- Changed `part[:1]` / `part[1:]` byte-slicing to `[]rune` conversion in `toExported`:
+  `strings.ToUpper(string([]rune(part)[:1])) + string([]rune(part)[1:])`
+- Added `{"éclat", "Éclat"}` to `TestToExported` to document and guard this behavior.
+- **Files:** `internal/codegen/codegen.go`, `internal/codegen/codegen_test.go`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (all pass, new subtest éclat)
+go vet ./...     — OK
+```
+
+## Next
+- **Blank identifier from `_` table name.** A table named `_` produces `toExported("_") = "_"`, generating `var _ = NewTable("_")`. The blank identifier discards the value silently — it can never be referenced. This should be investigated: should it error like a collision, or is a `_`-prefixed rename appropriate?
+- The project handles all known ASCII and UTF-8 edge cases. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 23
 
 ## Who This Helps
