@@ -1,9 +1,12 @@
 # Project Snapshot
-Generated: Sun Apr  5 13:18:54 EDT 2026
+Generated: Sun Apr  5 13:51:53 EDT 2026
 
 ## Git Status
 
 ## Recent Commits (last 10)
+536531d add unit tests for introspect error paths, bringing coverage to 100% (#16)
+78d3bf2 add integration test for non-ASCII table names through full pipeline (#15)
+65b4682 add unit tests for introspect.Tables using a mock SQL driver (#14)
 997fa2a add integration test for empty schema (view-only) pipeline (#13)
 04fadb6 add integration test for realistic 17-table schema with views excluded (#12)
 4bd6dd3 new lathe version
@@ -11,9 +14,6 @@ Generated: Sun Apr  5 13:18:54 EDT 2026
 c4df5fb add integration tests for introspect.Tables against real Postgres in CI (#6)
 a30baac cache Go modules in CI (#5)
 509b162 add CI badge to README (#4)
-b77ecc0 document -schema flag: generated identifiers exclude schema name (#3)
-d9a20fb add staticcheck to CI workflow (#2)
-9538773 add GitHub Actions CI workflow (#1)
 
 ## Go Module
 module github.com/libliflin/gosq-codegen
@@ -28,8 +28,8 @@ OK — builds clean
 ## Tests
 ```
 ?   	github.com/libliflin/gosq-codegen	[no test files]
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.345s
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.170s [no tests to run]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.367s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.174s
 ```
 
 ## Vet
@@ -56,16 +56,16 @@ github.com/libliflin/gosq-codegen/internal/introspect
 ## Coverage
 ```
 	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.211s	coverage: 98.6% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.302s	coverage: 0.0% of statements [no tests to run]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.203s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.289s	coverage: 100.0% of statements
 ```
 
 ## CI/CD Status
-Current branch: lathe/20260405-131854 (no PR created yet)
+Current branch: lathe/20260405-135153 (no PR created yet)
 
 ### All Open PRs (by current user)
 ```
-#13 [lathe/20260405-131557] state:MERGED checks:pass
+
 ```
 
 ### CI Configuration
@@ -74,10 +74,10 @@ Workflows found:
 
 ### Recent Workflow Runs
 ```
-#24006518040 queued/ event:push branch:main at:2026-04-05T17:18:55
-#24006501244 completed/success event:pull_request branch:lathe/20260405-131557 at:2026-04-05T17:17:59
-#24006500628 completed/success event:push branch:lathe/20260405-131557 at:2026-04-05T17:17:56
-#24006498095 completed/success event:pull_request branch:lathe/20260405-131557 at:2026-04-05T17:17:46
-#24006496005 completed/success event:push branch:lathe/20260405-131557 at:2026-04-05T17:17:37
+#24007093283 in_progress/ event:push branch:main at:2026-04-05T17:51:48
+#24007075401 completed/success event:pull_request branch:lathe/20260405-134644 at:2026-04-05T17:50:46
+#24007074031 completed/success event:push branch:lathe/20260405-134644 at:2026-04-05T17:50:42
+#24007069194 completed/success event:pull_request branch:lathe/20260405-134644 at:2026-04-05T17:50:27
+#24007068429 completed/success event:push branch:lathe/20260405-134644 at:2026-04-05T17:50:25
 ```
 
