@@ -12,9 +12,24 @@ Two packages. Two completely different testing strategies.
 
 The real job of this package is to query `information_schema.columns` in a live Postgres database. That can't be unit-tested without a real database.
 
-**Current state:** `introspect_test.go` contains only `package introspect`. The package's only logic (`Tables`) requires a live DB and has 0% automated coverage — this is correct and expected. The misleading `TestTableStructure` stub (which tested nothing) was removed in cycle 26. There is nothing to unit-test in the `introspect` package at present; `Table` and `Column` are pure data types with no behavior.
+**Unit tests:** `introspect_test.go` currently contains only `package introspect`. There is nothing to unit-test — `Table` and `Column` are pure data types, and `Tables` requires a live DB. Don't mock `database/sql`.
 
-**If adding introspect tests:** If logic is ever extracted from `Tables` that can be unit-tested (e.g., a helper that parses or transforms query results), test it inline — construct `Table` values directly, assert behavior you care about. Don't mock `database/sql` to simulate query results. If you need confidence on the full query path, add an integration test (clearly labeled `//go:build integration`) that requires a `TEST_DSN` environment variable and documents how to run it.
+**Integration tests (the next major addition):** Add `//go:build integration` tests that connect to a real Postgres instance via `TEST_DSN`. These tests should:
+1. Load DDL fixtures from `testdata/schemas/*.sql` into the database
+2. Call `introspect.Tables` and verify the returned `[]Table` matches the expected structure
+3. Pipe the result through `codegen.Generate` and verify the output compiles
+
+DDL fixtures should represent real-world patterns:
+- `testdata/schemas/ecommerce.sql` — 10-15 tables (users, orders, products, etc.), diverse column types, foreign keys, nullable columns
+- `testdata/schemas/non_ascii.sql` — tables/columns with accented characters, non-Latin scripts
+- `testdata/schemas/extensions.sql` — PostGIS geometry columns, pgcrypto, uuid-ossp
+- `testdata/schemas/multi_schema.sql` — tables in `public` + a custom schema like `reporting`
+
+These tests run in CI via `services: postgres:` in the GitHub Actions workflow. They are skipped locally unless `TEST_DSN` is set. Document how to run them locally with Docker:
+```bash
+docker run --rm -p 5432:5432 -e POSTGRES_PASSWORD=test postgres:16
+TEST_DSN="postgres://postgres:test@localhost:5432/postgres?sslmode=disable" go test -tags integration ./...
+```
 
 ### `internal/codegen`
 
@@ -26,7 +41,7 @@ This package turns `[]introspect.Table` into a `[]byte` of Go source. It require
 - Edge cases: empty table list, table with no columns, digit-leading column names (`2fa_enabled`), all-underscore column names (`___`), blank column names (`_`), non-ASCII column names (`éclat`), identifier collisions (all five types), multiple tables (sort order), `DotImport: false` path
 - `toExported` directly — via the table-driven `TestToExported` (43 subtests)
 
-**Current state (after cycle 32):** `codegen_test.go` has 16 test functions covering all of the above. Coverage is 98.6%. The only uncovered code is the `format.Source` error return path — unreachable from any valid input, not worth testing.
+**Current state (after ~37 cycles):** `codegen_test.go` has 16 test functions covering all of the above. Coverage is 98.6%. The only uncovered code is the `format.Source` error return path — unreachable from any valid input, not worth testing.
 
 ---
 
@@ -49,6 +64,7 @@ This package turns `[]introspect.Table` into a `[]byte` of Go source. It require
 | `TestGenerateMultiUnderscoreColumnCollision` | `_` + `__` in same table → both `Items_` → error |
 | `TestGenerateFieldPriorTableCollision` | `_users_name` (sorts early) + `users.name` → both `UsersName` → error |
 | `TestGenerateProductionScale` | 17 tables, 108 columns, diverse patterns, determinism |
+| `TestGenerateSingleTable` | basic single-table output with two columns, exact string match |
 | `TestToExported` | 43 subtests: all 17 initialisms, edge cases, consecutive initialisations, numeric segments, non-ASCII |
 
 ---
@@ -107,6 +123,21 @@ When adding collision tests, follow the same inline-construction pattern and tes
 
 ---
 
+## CI
+
+CI runs all tests automatically on every push and pull request via `.github/workflows/ci.yml`:
+
+```
+go build ./...
+go vet ./...
+go test ./...
+staticcheck ./...
+```
+
+Module caching is enabled (`cache: true` on `actions/setup-go`). Staticcheck is installed fresh each run via `go install ... @latest` (not cached, adds ~20–30 seconds — a known CI improvement opportunity).
+
+---
+
 ## Test commands
 
 ```bash
@@ -117,7 +148,7 @@ go test ./... -count=1      # Disable caching (always re-run)
 go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out
 ```
 
-No integration build tags are currently configured. If you add `//go:build integration` tests for `introspect`, document the `TEST_DSN` variable they require and explain how to run them in the test file's comments.
+Integration tests should use `//go:build integration` and require `TEST_DSN`. In CI, set `TEST_DSN` from the `services: postgres:` container. Run them with: `go test -tags integration ./...`. Document the `TEST_DSN` variable and local Docker instructions in the test file's comments.
 
 ---
 
@@ -135,7 +166,13 @@ The only uncovered code is the `format.Source` error return path in `Generate`. 
 
 ## What's left to test
 
-The correctness gaps are closed. The open testing question is infrastructure:
+The unit test correctness gaps are closed. The major remaining work is **integration tests against a real Postgres database in CI**:
 
-- There is no CI. A GitHub Actions workflow that runs `go test ./...` on push would exercise the existing tests automatically on every change. This is more valuable than any new unit test.
-- `introspect.Tables` has 0% coverage and always will without a live database — this is expected and correct.
+1. **DDL fixtures** in `testdata/schemas/` — real SQL schemas representing production patterns
+2. **`//go:build integration` tests** in `internal/introspect/` — load DDL, call `Tables`, verify results
+3. **End-to-end pipeline test** — DDL → introspect → codegen → write to temp dir → `go build` in a module that imports gosq
+4. **`services: postgres:` in CI** — real Postgres instance in GitHub Actions
+
+This is the single highest-value testing work remaining. It validates the entire promise of the tool — not just "does codegen produce correct strings" but "does the tool actually work against a real database and produce code that compiles."
+
+Unit test coverage of `introspect.Tables` will go from 0% to meaningful coverage once integration tests exist.

@@ -54,9 +54,9 @@ This is a clean one-way pipeline. Each stage has a single responsibility and a c
 **`toExported(name string) string`** — converts `snake_case` to `PascalCase` with Go initialisms. Not exported. Tested directly via `TestToExported` (43 subtests). The full initialism list: `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`.
 
 **Identifier capitalization:** The function uses `[]rune` slicing (not byte slicing) for capitalization:
-`strings.ToUpper(string([]rune(part)[:1])) + string([]rune(part)[1:])`. This correctly handles multi-byte UTF-8 characters at the start of a word (fixed in cycle 24).
+`strings.ToUpper(string([]rune(part)[:1])) + string([]rune(part)[1:])`. This correctly handles multi-byte UTF-8 characters at the start of a word.
 
-**Blank identifier guard:** If `toExported(tbl.Name) == "_"`, `Generate` returns an error immediately. This prevents generating `var _ = NewTable(...)` which would compile but silently discard the value via the blank identifier (added in cycle 25).
+**Blank identifier guard:** If `toExported(tbl.Name) == "_"`, `Generate` returns an error immediately. This prevents generating `var _ = NewTable(...)` which would compile but silently discard the value via the blank identifier.
 
 ### `main.go`
 
@@ -68,7 +68,7 @@ This is a clean one-way pipeline. Each stage has a single responsibility and a c
 | `-dsn` | *(required)* | PostgreSQL connection string |
 | `-out` | `schema/` | Output directory |
 | `-pkg` | `schema` | Go package name for generated file |
-| `-schema` | `public` | PostgreSQL schema to introspect |
+| `-schema` | `public` | PostgreSQL schema to introspect. Generated identifiers do not include the schema name — use distinct `-pkg` and `-out` values when generating from multiple schemas. |
 | `-dot-import` | `true` | Use dot-import for gosq |
 | `-version` | | Print version and exit |
 
@@ -80,6 +80,8 @@ This is a clean one-way pipeline. Each stage has a single responsibility and a c
 
 **Success message:** `wrote schema/schema.go (N tables)` — includes count for verification.
 **Warning:** `gosq-codegen: warning: no tables found in schema "<schema>"` if zero tables are returned (still writes the file, which is valid Go with just the package declaration).
+
+**`-version` flag:** Uses `debug.ReadBuildInfo()`. With `go install`, version comes from module metadata and prints correctly (e.g., `v0.1.0`). For local builds (`go build .`), it prints `(devel)` — this is expected Go behavior, not a bug.
 
 ---
 
@@ -117,8 +119,16 @@ Key invariants (tested and enforced):
 - `NewField` argument is `"tablename.columnname"` (lowercase originals from Postgres)
 - Field variable names are `TableIdent + toExported(columnName)`
 - `var (...)` block omitted if table has no columns
-- Output is gofmt-clean (tabs, not spaces)
+- Output is gofmt-clean (tabs, not spaces; `=` signs aligned within `var (...)` blocks)
 - Output is a deterministic function of input
+
+---
+
+## Multi-schema behavior
+
+The `-schema` flag selects which PostgreSQL schema to introspect. Generated identifiers are based on table and column names only — the schema name is not included in any identifier. Two different schemas sharing table names would produce identical Go identifiers.
+
+**Implication:** Users who need to generate from multiple schemas must use distinct `-pkg` and `-out` values to produce separate Go packages. This is documented in the README and in the flags table. There is no warning when a non-default schema is used.
 
 ---
 
@@ -129,3 +139,4 @@ Key invariants (tested and enforced):
 - Type mapping from Postgres types to Go types — `NewField` takes a string; type information in the generated file would couple output to gosq's internals
 - Interfaces or adapters over `introspect` and `codegen` for hypothetical future databases or output formats — the pipeline is the right shape now
 - A `-timeout` flag — 30 seconds covers all realistic cases unless a user specifically reports hitting it
+- A `-dry-run` flag — the output is deterministic and the file is overwritten atomically, so there's no need
