@@ -2,6 +2,38 @@
 
 ---
 
+# Changelog — Cycle 33
+
+## Who This Helps
+- **Stakeholder:** contributors and users
+- **Impact:** Every push and every PR now triggers automated validation. A contributor who submits a PR gets a green/red signal without running anything locally. A user installing `@latest` can see that the released version passed CI. This is the single most significant infrastructure gap now closed.
+
+## Observed
+- No `.github/workflows/` directory existed. All validation was local and manual.
+- `go build ./...`, `go test ./...`, and `go vet ./...` were all clean — the project was correct but unverified automatically.
+- The project description and priority stack both identified CI as the highest-value next change after cycle 32.
+
+## Applied
+- Created `.github/workflows/ci.yml`: a single `test` job on `ubuntu-latest` that runs on every push and pull_request.
+  - `actions/checkout@v4` — check out the code
+  - `actions/setup-go@v5` with `go-version-file: go.mod` — uses the Go version declared in the module, automatically tracks future upgrades
+  - `go build ./...`, `go vet ./...`, `go test ./...`
+- PR: https://github.com/libliflin/gosq-codegen/pull/1
+
+## Validated
+```
+go build ./...   — OK
+go vet ./...     — OK
+go test ./...    — OK
+```
+
+## Next
+- Wait for CI to pass on PR #1, then merge with `--squash`.
+- Once merged, consider incrementally improving CI: add `staticcheck`, add coverage reporting. Neither is urgent — green CI on push is the valuable part.
+- The `-schema` flag behavior (two schemas with identical table names produce identical identifiers with no warning) is worth either documenting or adding a warning for.
+
+---
+
 # Changelog — Cycle 32
 
 ## Who This Helps
