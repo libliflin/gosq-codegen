@@ -82,7 +82,7 @@ func TestTablesEcommerce(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := introspect.Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestTablesNonASCII(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := introspect.Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestTablesSchemaIsolation(t *testing.T) {
 	loadFixture(schemaB, "../../testdata/schemas/reporting.sql")
 
 	// Tables(schemaB) must return only the reporting table, not ecommerce tables.
-	tablesB, err := introspect.Tables(ctx, db, schemaB)
+	tablesB, err := introspect.Tables(ctx, db, schemaB, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables(%q): %v", schemaB, err)
 	}
@@ -320,7 +320,7 @@ func TestTablesSchemaIsolation(t *testing.T) {
 	}
 
 	// Tables(schemaA) must return only the ecommerce tables, not the reporting table.
-	tablesA, err := introspect.Tables(ctx, db, schemaA)
+	tablesA, err := introspect.Tables(ctx, db, schemaA, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables(%q): %v", schemaA, err)
 	}
@@ -375,7 +375,7 @@ func TestPipelineComplexSchema(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := introspect.Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -526,7 +526,7 @@ func TestPipelineNonASCIITableName(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := introspect.Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -637,7 +637,7 @@ DROP TABLE _base CASCADE;`
 		t.Fatalf("create view fixture: %v", err)
 	}
 
-	tables, err := introspect.Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -724,7 +724,7 @@ func TestPipelineEcommerce(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := introspect.Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema, introspect.DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}

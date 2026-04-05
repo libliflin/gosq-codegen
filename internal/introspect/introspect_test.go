@@ -135,7 +135,7 @@ func (s *mockQueryErrStmt) Query(_ []driver.Value) (driver.Rows, error) { return
 // the schema contains no base tables.
 func TestTablesEmpty(t *testing.T) {
 	db := newMockDB(t, nil)
-	tables, err := Tables(context.Background(), db, "public")
+	tables, err := Tables(context.Background(), db, "public", DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestTablesNullableParsing(t *testing.T) {
 		{"users", "bio", "text", "YES", int64(2)},
 	}
 	db := newMockDB(t, rows)
-	tables, err := Tables(context.Background(), db, "public")
+	tables, err := Tables(context.Background(), db, "public", DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestTablesSorting(t *testing.T) {
 		{"middle", "id", "integer", "NO", int64(1)},
 	}
 	db := newMockDB(t, rows)
-	tables, err := Tables(context.Background(), db, "public")
+	tables, err := Tables(context.Background(), db, "public", DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestTablesSchemaAndOrdinal(t *testing.T) {
 	}
 	const schema = "myschema"
 	db := newMockDB(t, rows)
-	tables, err := Tables(context.Background(), db, schema)
+	tables, err := Tables(context.Background(), db, schema, DialectPostgres)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestTablesSchemaAndOrdinal(t *testing.T) {
 // db.QueryContext, so callers see a meaningful error message.
 func TestTablesQueryError(t *testing.T) {
 	db := newMockQueryErrDB(t, fmt.Errorf("connection refused"))
-	_, err := Tables(context.Background(), db, "public")
+	_, err := Tables(context.Background(), db, "public", DialectPostgres)
 	if err == nil {
 		t.Fatal("expected error from Tables when QueryContext fails, got nil")
 	}
@@ -245,7 +245,7 @@ func TestTablesScanError(t *testing.T) {
 		{"users", "id", "integer", "NO", "not-a-number"},
 	}
 	db := newMockDB(t, rows)
-	_, err := Tables(context.Background(), db, "public")
+	_, err := Tables(context.Background(), db, "public", DialectPostgres)
 	if err == nil {
 		t.Fatal("expected error from Tables when Scan fails, got nil")
 	}
@@ -260,7 +260,7 @@ func TestTablesRowsIterationError(t *testing.T) {
 	iterErr := fmt.Errorf("network error during iteration")
 	// No data rows; the error fires on the first Next call.
 	db := newMockRowsErrDB(t, nil, iterErr)
-	_, err := Tables(context.Background(), db, "public")
+	_, err := Tables(context.Background(), db, "public", DialectPostgres)
 	if err == nil {
 		t.Fatal("expected error from Tables when rows iteration fails, got nil")
 	}
