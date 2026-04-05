@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 37
-
-## Who This Helps
-- **Stakeholder:** contributors
-- **Impact:** CI now caches the Go module download cache between runs. A contributor who pushes a fix and waits for CI to turn green now waits less — module downloads are skipped on the second and subsequent runs for the same dependency set. `actions/setup-go@v5` supports `cache: true` natively; it hashes `go.sum` and restores the module cache on a hit. No external cache action needed.
-
-## Observed
-- The `setup-go` step in `ci.yml` had no `cache` configuration. Every CI run re-downloaded all Go module dependencies from the network.
-- `actions/setup-go@v5` ships with built-in caching (`cache: true`) that hashes `go.sum` and stores `~/go/pkg/mod`. A single line enables it.
-- Faster CI means contributors get feedback sooner on every push. The current test suite is fast, but module downloads (including `honnef.co/go/tools/cmd/staticcheck@latest`) add latency on cache misses.
-
-## Applied
-- Added `cache: true` to the `actions/setup-go@v5` step in `.github/workflows/ci.yml`.
-- **File:** `.github/workflows/ci.yml`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK
-go vet ./...     — OK
-```
-
-## Next
-- The `actions/checkout@v4` and `actions/setup-go@v5` use Node.js 20. GitHub's Node 20 deprecation is scheduled for September 2026 — updating action versions before then avoids forced migration. Not urgent yet.
-- All known correctness gaps are closed. Further improvements should be driven by real user feedback.
-
----
-
 # Changelog — Cycle 36
 
 ## Who This Helps

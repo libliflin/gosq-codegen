@@ -12,7 +12,7 @@ The project is **gosq-codegen** — a CLI that introspects a PostgreSQL schema a
 
 The primary external stakeholder. They've adopted gosq as a query builder and need their schema represented as Go variables — `UsersID`, `OrdersCreatedAt`, etc. — without maintaining hundreds of declarations by hand.
 
-**First encounter:** They find gosq-codegen via the gosq README or a search. They read the README, run `go install github.com/libliflin/gosq-codegen@latest`, and point it at their database:
+**First encounter:** They find gosq-codegen via the gosq README or a search. They read the README, see the CI badge (green — passing), run `go install github.com/libliflin/gosq-codegen@latest`, and point it at their database:
 
 ```
 gosq-codegen -dsn "postgres://user:pass@localhost:5432/mydb" -out schema/
@@ -22,13 +22,13 @@ They open `schema/schema.go`, see their tables and columns as clean Go identifie
 
 **What success looks like:** The generated code compiles on the first run against their actual schema. Output is gofmt-clean and deterministic — same schema in, same file out, every time. They regenerate on schema changes and only see the diffs that reflect actual schema changes, nothing else.
 
-**What would make them trust it:** It handles their schema without surprises — unusual column names, reserved words, digit-prefixed columns, non-ASCII identifiers, long names. Identifier collisions are caught and named, not silently broken. Error messages say what went wrong and where.
+**What would make them trust it:** It handles their schema without surprises — unusual column names, reserved words, digit-prefixed columns, non-ASCII identifiers, long names. Identifier collisions are caught and named, not silently broken. Error messages say what went wrong and where. The CI badge on GitHub shows automated tests are passing.
 
 **What would make them leave:** Generated code that doesn't compile. A table with an unusual column name causing a panic or cryptic format error. Spurious diffs between runs. Identifiers that conflict with Go conventions in ways that break their builds.
 
-**Where the project currently stands (after cycle 32):** The core is solid and well-tested. The tool handles:
+**Where the project currently stands (after ~37 cycles):** The core is solid and well-tested. The tool handles:
 - Common `snake_case` patterns (`users.id` → `UsersID`, `orders.created_at` → `OrdersCreatedAt`)
-- Non-ASCII column names starting with multi-byte UTF-8 characters (fixed cycle 24)
+- Non-ASCII column names starting with multi-byte UTF-8 characters (uses `[]rune` slicing)
 - Digit-prefixed column names (`2fa_enabled` → `_2faEnabled`)
 - All-underscore column names (`___` → `_` suffix in field ident)
 - Blank-identifier table names (`_`, `__` — errors early with a clear message)
@@ -39,8 +39,9 @@ They open `schema/schema.go`, see their tables and columns as clean Go identifie
 - Consecutive initialisations (`api_id` → `APIID`, `oauth_api_url` → `OauthAPIURL`)
 - Numeric version segments (`order_v2` → `OrderV2`, `api_v2` → `APIV2`)
 - Production-scale schemas — tested at 17 tables and 108 columns with diverse naming patterns
+- `-schema` flag behavior documented: identifiers exclude schema name; multi-schema users should use distinct `-pkg` and `-out` values
 
-**The remaining gap:** There is no CI/CD. The project has no `.github/workflows/` directory. Every change is verified only locally, and every merge is unverified automatically. The tool's correctness is solid, but the infrastructure that would give contributors and users confidence in future changes doesn't exist.
+**The remaining gap:** The tool has never been tested automatically against a real Postgres database. `introspect.Tables` has 0% automated coverage. The full pipeline — DDL → introspect → codegen → compilable Go — is only verified by hand. CI should run integration tests against a real Postgres service with DDL fixtures representing common schema patterns (e-commerce, multi-schema, PostGIS, etc.).
 
 ### Maintainers / Contributors
 
@@ -48,11 +49,11 @@ Developers working on gosq-codegen itself — currently the author.
 
 **First encounter:** They clone the repo. The pipeline is clean: `internal/introspect` queries `information_schema.columns`, returns `[]Table`. `internal/codegen` renders `[]Table` into Go source. `main.go` is a tight CLI that wires flags to the pipeline. Tests in `codegen_test.go` have 16 test functions (including 43 subtests in `TestToExported`) covering 98.6% of the codegen package.
 
-**What success looks like:** Adding support for a new edge case is a small, targeted change. Tests fail when output is wrong. Error messages point to the cause, not an internal line number.
+**What success looks like:** Adding support for a new edge case is a small, targeted change. Tests fail when output is wrong. Error messages point to the cause, not an internal line number. CI tells them within ~1 minute whether their change passes.
 
-**What builds trust:** Tests that document behavior for unusual inputs. Clear package boundaries. Errors that include the table/column causing the problem. Consistent patterns they can follow for new additions. CI that runs automatically on every push.
+**What builds trust:** Tests that document behavior for unusual inputs. Clear package boundaries. Errors that include the table/column causing the problem. Consistent patterns they can follow for new additions. CI that runs automatically on every push and PR.
 
-**Where the project currently stands:** Very solid on code quality, test coverage, and correctness. The missing piece is automated validation: without CI, a contributor submitting a PR has no automated signal that their change passes tests. That gap is the highest-value thing to address next.
+**Where the project currently stands:** Solid on code quality, test coverage, and correctness. CI is in place: every push and PR triggers `go build ./...`, `go vet ./...`, `go test ./...`, and `staticcheck ./...`. The remaining CI rough edges (Node.js 20 deprecation, non-pinned staticcheck) are low-priority but real.
 
 ### The gosq project itself
 
@@ -62,11 +63,24 @@ This stakeholder benefits silently when gosq-codegen works well. It has no day-t
 
 ### Validation infrastructure
 
-**Current state:** No CI/CD at all. No `.github/workflows/` directory, no Makefile, no other automated pipeline. Tests are run manually and locally. The project's 98.6% coverage and clean vet/staticcheck status are verified only on the author's machine.
+**Current state:** CI exists and is healthy. `.github/workflows/ci.yml` runs on every push and pull request:
+1. `actions/checkout@v4` — checks out code
+2. `actions/setup-go@v5` — installs Go from `go.mod`, with `cache: true` (module cache retained between runs)
+3. `go build ./...` — compilation check
+4. `go vet ./...` — static analysis
+5. `go test ./...` — all tests
+6. `go install honnef.co/go/tools/cmd/staticcheck@latest` — installs staticcheck (fresh each run; not cached)
+7. `staticcheck ./...` — additional static analysis
 
-**What this means for stakeholders:** Every stakeholder is trusting unverified changes. A contributor who submits a PR gets no automated feedback. A user installing `@latest` has no guarantee that the released version passed its own tests in CI. This is the single most significant infrastructure gap.
+**What CI covers:** Compilation, tests, vet, staticcheck on every push and PR. Recent workflow runs show consistent pass. CI badge is in the README.
 
-**Repository security for autonomous operation:** The repo has no `.github/` directory — no workflows exist, so there are no `pull_request_target` or `issue_comment` triggers that could be exploited for privilege escalation. The engine fetches only structured data (statuses, numbers, booleans) from GitHub, never free-text fields. However, with no branch protection configured (not verifiable without GitHub API access), the default branch may be directly pushable — a risk to document and ask the user to fix before running many cycles autonomously. The repo appears public given `go install github.com/libliflin/gosq-codegen@latest` in the README; public repos have higher injection risk from external PR/issue spam.
+**What CI doesn't cover yet:** Integration tests against a real PostgreSQL database. This is the next major infrastructure addition — add a `services: postgres:` block to the workflow, DDL fixtures in `testdata/schemas/`, and `//go:build integration` tests that exercise the full pipeline. No performance benchmarks. No coverage threshold enforcement.
+
+**Known CI weaknesses:**
+- `go install honnef.co/go/tools/cmd/staticcheck@latest` installs a fresh binary on every run. This adds ~20–30 seconds to CI. It could be replaced with `staticcheck-action` or a pinned version that benefits from module caching.
+- `actions/checkout@v4` and `actions/setup-go@v5` use Node.js 20 internally. GitHub has announced Node.js 20 deprecation for GitHub Actions in September 2026. These will need to be updated to newer action versions before the forced cutover.
+
+**Repository security for autonomous operation:** The repo is public (per `go install github.com/libliflin/gosq-codegen@latest` in the README). The CI workflow triggers on `push` and `pull_request` — not on `pull_request_target` or `issue_comment`, so there is no elevated-permission attack surface from external contributors. The engine fetches only structured data (statuses, numbers, booleans) from GitHub — never free-text PR titles, comments, or commit messages. Branch protection status is not verifiable without GitHub API access; if the default branch is unprotected, autonomous cycles could theoretically push directly to main — worth asking the user to enable branch protection (require PR reviews) before running many cycles.
 
 Every cycle, ask: **which stakeholder's journey can I make noticeably better right now, and where?**
 
@@ -90,13 +104,25 @@ gosq-codegen does one thing. Each new flag or behavior path adds surface area to
 
 **What would change this:** Concrete feedback that a real schema pattern can't be handled without a new option.
 
-### Unit testability (no DB) vs. integration confidence (real Postgres)
+### Fast local tests vs. real database confidence
 
-`introspect.Tables` requires a live Postgres database and has 0% automated test coverage. This is correct and expected — mocking `database/sql` produces fragile tests that diverge from reality.
+Unit tests must run fast with no external dependencies — `go test ./...` should always work on a fresh clone with nothing but Go installed. This is the local development experience and it must stay fast.
 
-**Favor: keep it dependency-free.** Don't introduce testcontainers or Docker Compose without explicit direction. Any logic extractable from `introspect.Tables` that's complex enough to unit-test is fair game — but the current query is simple enough that extraction wouldn't add confidence.
+But `introspect.Tables` has 0% automated coverage. The tool's entire value proposition — "point it at your database and get correct output" — has never been verified automatically against a real Postgres instance. That's a gap.
 
-**What would change this:** A significant rewrite of the introspect query where regression testing becomes valuable enough to justify the dependency.
+**Resolution: two tiers.**
+- **Unit tests (default):** No database. Construct `[]introspect.Table` inline, test codegen. This is what `go test ./...` runs. Fast, no dependencies.
+- **Integration tests (CI only):** Use `//go:build integration` and a real Postgres instance via GitHub Actions `services: postgres:`. These tests load DDL fixtures (`testdata/schemas/*.sql`), run `introspect.Tables` against the live database, pipe the result through `Generate`, and verify the output compiles. They run in CI on every push/PR but are skipped locally unless a developer explicitly opts in with `TEST_DSN`.
+
+The integration tier is the next major piece of work. It validates the full pipeline — SQL schema → introspect → codegen → compilable Go — against real Postgres, with real DDL, automatically.
+
+### CI speed vs. CI coverage
+
+The current CI installs staticcheck fresh on every run, adding ~20–30 seconds. Caching it or using a dedicated action would speed up feedback.
+
+**Favor: speed for contributors.** A 1-minute CI pass gets responded to quickly; a 3-minute CI pass gets ignored. Faster CI is a real contributor experience improvement. But don't sacrifice a static analysis step to get speed — find a way to have both.
+
+**What would change this:** CI consistently finishes under 2 minutes after caching improvements. Then speed is no longer a tension.
 
 ---
 
@@ -104,41 +130,42 @@ gosq-codegen does one thing. Each new flag or behavior path adds surface area to
 
 Each cycle:
 
-1. **Read the snapshot.** Run `.lathe/snapshot.sh` to understand the current state — build, tests, vet, coverage, TODOs.
-2. **Pick one change.** Imagine a Go developer who just ran `gosq-codegen` against their production database. What single change would most improve their experience, or the experience of a contributor reading the code? Pick the highest-value change at the lowest broken layer.
+1. **Read the snapshot.** Run `.lathe/snapshot.sh` to understand the current state — build, tests, vet, coverage, CI status.
+2. **Pick one change.** Imagine a Go developer who just ran `gosq-codegen` against their production database. What single change would most improve their experience, or the experience of a contributor submitting a PR? Pick the highest-value change at the lowest broken layer.
 3. **Implement it.** Make exactly that change. Match existing style and conventions. No extras.
 4. **Validate it.** `go build ./...`, `go test ./...`, `go vet ./...`. All must pass. Show the output.
 5. **Write the changelog.** Record what changed, who it helps, and what matters next.
 
 The "pick" step is an act of empathy. You're not grinding through a queue — you're asking what would make the biggest real difference to the person who just found this project.
 
-**The bias to watch for:** After 32 cycles of test and correctness work, the temptation is to keep adding tests that cover the same ground. But the stakeholder gaps are now higher-level: the tool produces correct output but there's no automated verification of that correctness in CI. A new test for a pattern that's already well-covered is lower value than CI that runs the existing tests automatically.
+**The bias to watch for:** After ~37 cycles of correctness and CI work, the temptation is to polish things that are already good. But the core experience (generate clean, correct, deterministic Go from any PostgreSQL schema) is solid. Remaining improvements are real but incremental. A README tweak that saves 5 seconds of confusion is still worth doing — just be honest about who it helps and how much.
 
 ---
 
 ## What Matters Now
 
-The project has gone through 32 cycles. The correctness work is essentially complete:
+The project has completed ~37 cycles. The correctness and infrastructure work is essentially done:
 
 - All five collision types are detected and tested
-- `TestToExported` has 43 subtests covering all initialisms, edge cases, consecutive initialisations, and numeric version segments
+- `TestToExported` has 43 subtests covering all 17 initialisms, edge cases, consecutive initialisations, and numeric version segments
 - `TestGenerateProductionScale` exercises 17 tables and 108 columns with diverse naming patterns
 - Coverage is 98.6% — the only uncovered code is the `format.Source` error path (unreachable)
-- `go vet` and `staticcheck` are clean
+- `go vet` and `staticcheck` are clean and enforced in CI
+- CI badge is in the README
+- `-schema` flag behavior is documented
 
-The questions that remain are infrastructure and robustness, not correctness for known inputs:
+**The highest-value remaining work is integration testing against a real Postgres database in CI.**
 
-- **CI/CD is missing.** There is no `.github/workflows/` directory. Creating a minimal GitHub Actions workflow — one that runs `go build ./...`, `go test ./...`, and `go vet ./...` on push and pull_request — is the single highest-value change available. It doesn't need to be perfect on day one; a minimal, fast CI workflow is better than none. The agent can improve it incrementally (add staticcheck, add coverage reporting) in later cycles.
+The tool's core promise — "point it at your database and get correct Go" — has never been verified automatically against a real database. Every unit test constructs `[]introspect.Table` by hand. Nobody tests whether `introspect.Tables` returns the right data from a real `information_schema.columns` query, or whether the full pipeline (DDL → introspect → codegen → compile) actually works.
 
-- **Non-public schema behavior.** The `-schema` flag passes the schema name to the query correctly, but the generated output doesn't include the schema name anywhere. Two schemas that share table names would produce identical generated identifiers. Is this the right behavior? Is it documented? A user running `-schema reporting` alongside `-schema public` might be surprised. This is worth either documenting clearly or adding a warning for.
+**What this looks like:**
+1. Add `testdata/schemas/` with `.sql` DDL files representing real-world patterns: a basic e-commerce schema, a schema with non-ASCII column names, a schema with PostGIS types, a multi-schema setup
+2. Add `//go:build integration` tests in `internal/introspect/` that connect to Postgres, load a DDL fixture, call `Tables`, and verify the result
+3. Add an end-to-end integration test that runs the full pipeline: load DDL → introspect → codegen → write to temp dir → `go build` the output in a module that imports gosq
+4. Add `services: postgres:` to `.github/workflows/ci.yml` so these tests run automatically
+5. Keep `go test ./...` (without the integration tag) fast and DB-free for local development
 
-- **`staticcheck` is clean but not in CI.** Even once CI exists, adding staticcheck requires it to be installed — a GitHub Actions workflow can use `honnef.co/go/tools/cmd/staticcheck` or the `staticcheck-action`. Incremental.
-
-- **The `format.Source` error path** is the only uncovered code (1.4%). It's unreachable from any valid input and not worth testing. This is not a gap.
-
-None of these are about adding more unit tests for `toExported` patterns. That work is done.
-
-**The right question now:** what would make a contributor confident that their PR didn't break anything, without running anything locally?
+**After integration tests are in place**, remaining improvements are incremental: CI speed (pin staticcheck), Actions version currency (Node.js 20 deprecation), GoDoc examples, version tagging.
 
 Never treat any list — in a README, an issue, or a snapshot — as a queue to grind through. Lists are context.
 
@@ -170,15 +197,15 @@ Each cycle makes exactly one improvement. If you try to do two things you'll do 
 
 ## Staying on Target
 
-**Adding more of the same when the core experience isn't solid yet.** More tests that cover the same ground as existing tests don't add confidence. More flags that nobody has asked for don't add value.
+**Adding more of the same when the core experience isn't solid yet.** More `TestToExported` subtests don't add confidence when 43 already exist. More flags nobody has asked for don't add value.
 
-**Building something whose prerequisite doesn't exist.** Don't add integration test infrastructure before verifying there's a meaningful gap to cover.
+**Polishing CI when the integration gap is still open.** Pinning staticcheck or updating Actions versions is lower value than adding Postgres integration tests to CI. Fix the big gap first, then polish.
 
 **Polishing internals users never see.** `toExported` is an internal function. Its implementation is correct, well-tested with 43 cases. Don't refactor for aesthetics.
 
-**Grinding `TestToExported` past 43 cases when CI doesn't exist.** The initialism coverage is thorough. Adding more `toExported` subtests when there's no CI to run them automatically is polishing the wrong surface. The contributor who submits a PR doesn't have automated confidence — that's the gap to fix.
+**Fidgeting instead of stress-testing.** When the core works, the temptation is to polish — README tweaks, doc alignment, flag additions. Each one is small and correct. But if you've spent 3+ cycles on polish and haven't validated the full pipeline against a real or realistic schema end-to-end (generate → write file → `go build` in a real module that imports gosq), that's the gap to address. You can construct a realistic test that does this yourself — you don't need an external database to test the codegen output for compilability.
 
-When in doubt: would a gosq user with a real production schema notice this change? Would a contributor making a PR get better automated feedback?
+**When in doubt:** Would a gosq user with a real production schema notice this change? Would a contributor making a PR get better automated feedback?
 
 ---
 
@@ -214,12 +241,11 @@ Write to `.lathe/state/changelog.md` (prepend each new cycle's entry):
 
 The lathe runs on a branch and uses PRs to trigger CI. The engine provides session context (current branch, PR number, CI status) in the prompt each cycle. The runtime agent works within this model:
 
-- Commit and push to the session branch. Create PRs with `gh pr create` and merge with `gh pr merge --squash` when CI passes.
-- CI failures are top priority. When CI fails, the next cycle should fix it before doing anything else.
-- CI that takes too long (>2 minutes) is itself a problem — fast CI means faster feedback.
-- **If there is no CI configuration at all (as is currently the case), creating one is the single highest-value change the agent can make.** Start minimal: a GitHub Actions workflow that runs `go build ./...`, `go test ./...`, and `go vet ./...`. The agent can improve CI incrementally in later cycles — don't try to build the perfect pipeline on day one.
-- External CI failures (dependency outages, vulnerability scanners, upstream breakage) require judgment. Explain reasoning in the changelog: is this worth a workaround? A separate fix? Or should it keep working and let the external issue resolve?
-- When a PR is merged, create a new branch and PR for the next batch of work.
+- Commit and push to the session branch. Create PRs with `gh pr create` when none exists.
+- The engine automatically merges PRs when CI passes and creates a fresh branch. The agent never merges PRs or creates branches — it just implements, commits, pushes, and creates a PR if one doesn't exist.
+- **CI failures are top priority.** When CI fails, the next cycle should fix it before doing anything else.
+- **CI that takes too long (>2 minutes) is itself a problem** — fast CI means faster feedback for contributors. Current CI is borderline: staticcheck installation adds ~20–30 seconds.
+- **External CI failures** (dependency outages, vulnerability scanners, upstream breakage) require judgment. Explain reasoning in the changelog: is this worth a workaround? A separate fix? Or should it keep working and let the external issue resolve?
 
 The PR/CI workflow is part of the job, not something happening around it.
 
@@ -236,6 +262,7 @@ The PR/CI workflow is part of the job, not something happening around it.
 - Never remove tests to make them pass. If a test is revealing a real bug, fix the bug.
 - Generated output must be deterministic. Same schema in → same file out. Tables sorted alphabetically, columns in `OrdinalPos` order.
 - Generated Go source must be gofmt-clean. `go/format` is already applied in `Generate` — don't remove it.
-- The `introspect` package requires a live database to function. For unit tests, construct in-memory `[]Table` values as the existing tests do. Don't introduce a test database dependency without explicit direction.
+- Unit tests (`go test ./...`) must never require a database. Construct in-memory `[]Table` values for codegen tests. Integration tests (`//go:build integration`) may use a real Postgres instance provided via `TEST_DSN` — these run in CI via `services: postgres:` and are skipped locally by default.
 - When adding a dependency to `go.mod`, use `go get` — don't hand-edit the file.
 - Identifier changes in generated output rename variables in users' codebases. Treat naming changes as breaking changes — only make them for clear correctness reasons, never for aesthetics.
+- When modifying CI, verify the change locally where possible and describe in the changelog what it does and why it's safe.
