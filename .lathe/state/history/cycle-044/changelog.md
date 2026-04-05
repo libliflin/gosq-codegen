@@ -2,36 +2,6 @@
 
 ---
 
-# Changelog — Cycle 47
-
-## Who This Helps
-- **Stakeholder:** contributors and CI
-- **Impact:** CI was failing on every push with `TestPipelineProductionScale` asserting identifiers that don't match what the code actually produces. The test checked for `"ApiKeysAPIKey"` and `"HttpLogsHTTPStatusCode"` but `api` and `http` are both in the initialism list, so `api_keys` → `APIKeys` and `http_logs` → `HTTPLogs`. The correct identifiers are `APIKeysAPIKey`, `HTTPLogsHTTPStatusCode`, `HTTPLogsURL`, and `HTTPLogsIPAddr`.
-
-## Observed
-- CI runs `#24003904023` and `#24003908745` both failed: `integration_test.go:470: generated source missing identifier "ApiKeysAPIKey"`.
-- The generated source showed `APIKeysAPIKey` (correct) but the test expected `ApiKeysAPIKey` (wrong).
-- The cycle 46 cleanup commit (`185707f`) pushed the wrong expected identifiers in the `wantIdents` slice.
-- `api` and `http` are both in the 17-entry initialism list. `api_keys` → `["api", "keys"]` → `API` + `Keys` = `APIKeys`. `http_logs` → `["http", "logs"]` → `HTTP` + `Logs` = `HTTPLogs`.
-
-## Applied
-- Fixed `wantIdents` in `TestPipelineProductionScale`: `"ApiKeysAPIKey"` → `"APIKeysAPIKey"`, `"HttpLogsHTTPStatusCode"` → `"HTTPLogsHTTPStatusCode"`, `"HttpLogsURL"` → `"HTTPLogsURL"`, `"HttpLogsIPAddr"` → `"HTTPLogsIPAddr"`.
-- Updated the comments in the test to correctly document the identifier derivation.
-- **File:** `internal/introspect/integration_test.go`
-
-## Validated
-```
-go build ./...                   — OK
-go test ./...                    — OK
-go vet ./...                     — OK
-go build -tags integration ./... — OK
-```
-
-## Next
-- All known gaps are closed. CI should pass once this fix lands. Further improvements should be driven by real user feedback.
-
----
-
 # Changelog — Cycle 46
 
 ## Who This Helps
