@@ -2,6 +2,69 @@
 
 ---
 
+# Changelog — Cycle 39
+
+## Who This Helps
+- **Stakeholder:** gosq users and contributors
+- **Impact:** The core promise — "generate correct, compilable Go from any schema" — is now verified automatically on every `go test ./...`. Before this cycle, no test ever compiled the generated output; tests only checked that the byte string was correct. A contributor who accidentally introduces a syntax error into `Generate` (e.g. an unbalanced paren, an invalid identifier) now gets a failing test immediately rather than discovering the breakage at user runtime.
+
+## Observed
+- All existing codegen tests construct `[]introspect.Table` inline and assert the exact `string(got)`. They verify that the bytes are right, but none of them actually compile the output.
+- `go/format` catches syntax errors early (and the `format.Source` error path is unreachable from valid input), but it does not verify that the generated declarations are semantically valid Go — e.g. that all referenced identifiers exist, imports resolve, variable types are consistent.
+- The Lathe notes identified "end-to-end pipeline test: codegen → compile" as the natural follow-on after cycle 38's integration test.
+
+## Applied
+- Added `TestGenerateCompiles` to `internal/codegen/codegen_test.go`.
+- The test generates Go source for a two-table schema (users + orders, with `api_key` to exercise an initialism), writes it to a `t.TempDir()` module, and runs `go build ./schema`.
+- To avoid network access, the test creates a minimal `gosqstub` local module that satisfies the `github.com/libliflin/gosq` import with stub `NewTable`/`NewField` functions. A `replace` directive in `go.mod` points at the stub — no proxy, no checksum.
+- Added `os`, `os/exec`, `path/filepath` to imports.
+- **File:** `internal/codegen/codegen_test.go`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK (TestGenerateCompiles passes in ~40ms)
+go vet ./...     — OK
+```
+
+## Next
+- The integration test (`TestTablesEcommerce`) could be extended to also call `codegen.Generate` and compile the result — verifying the full DDL → introspect → codegen → compile pipeline end-to-end. That would require a similar gosq stub or network access in CI.
+- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026.
+
+---
+
+# Changelog — Cycle 38
+
+## Who This Helps
+- **Stakeholder:** gosq users and contributors
+- **Impact:** The tool's core promise — "point it at your database and get correct Go" — is now verified automatically against a real PostgreSQL database on every push and PR. `introspect.Tables` had 0% automated coverage before this cycle. The integration tests load a DDL fixture, call `Tables`, and verify table names, column names, ordinal positions, and nullability are all correct.
+
+## Observed
+- `introspect.Tables` had 0% automated coverage. All existing tests construct `[]introspect.Table` inline, bypassing the DB query layer entirely.
+- The full pipeline (DDL → introspect → codegen) had never been verified automatically. CI ran unit tests but no integration tests.
+- The project description identified this as the single highest-value remaining work across multiple prior cycles.
+
+## Applied
+- Created `testdata/schemas/ecommerce.sql`: a two-table DDL fixture (`users`, `orders`) with NOT NULL and nullable columns, realistic data types.
+- Created `internal/introspect/integration_test.go` (`//go:build integration`): `TestTablesEcommerce` creates a temporary Postgres schema, loads the DDL fixture via a dedicated connection (`SET search_path`), calls `Tables`, and asserts table names are alphabetically sorted, column names and ordinal positions are correct, and nullability matches the DDL.
+- Updated `.github/workflows/ci.yml`: added `services: postgres:` (postgres:16, health-checked), added `go test -tags integration ./...` with `TEST_DSN` pointing at the service.
+- Unit tests (`go test ./...`) remain DB-free and pass without any external dependencies — the `//go:build integration` tag prevents integration tests from running locally unless `TEST_DSN` is set.
+- **Files:** `testdata/schemas/ecommerce.sql`, `internal/introspect/integration_test.go`, `.github/workflows/ci.yml`
+
+## Validated
+```
+go build ./...               — OK
+go test ./...                — OK (unit tests pass, no DB required)
+go vet ./...                 — OK
+go build -tags integration ./... — OK (integration test file compiles)
+```
+
+## Next
+- The integration test verifies `introspect.Tables` returns correct data. A natural next addition is an end-to-end pipeline test: DDL → introspect → codegen → write to temp dir → `go build` in a module that imports gosq. This would verify that the generated code actually compiles.
+- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026. Not urgent yet.
+
+---
+
 # Changelog — Cycle 36
 
 ## Who This Helps
