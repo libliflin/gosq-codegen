@@ -22,6 +22,7 @@ import (
 
 	"github.com/libliflin/gosq-codegen/internal/codegen"
 	"github.com/libliflin/gosq-codegen/internal/introspect"
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
@@ -684,6 +685,180 @@ DROP TABLE _base CASCADE;`
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated code does not compile:\n%s\n\ngenerated source:\n%s", out, src)
 	}
+}
+
+// TestPipelineMySQLEcommerce runs the full pipeline against a real MySQL
+// instance: DDL fixture → introspect.Tables (MySQL dialect) → codegen.Generate
+// → go build. This is the MySQL counterpart to TestPipelineEcommerce, and
+// verifies that the DialectMySQL placeholder style and information_schema query
+// work correctly against a real MySQL 8 database.
+//
+// Requires TEST_MYSQL_DSN (e.g. "root:test@tcp(127.0.0.1:3306)/testdb").
+func TestPipelineMySQLEcommerce(t *testing.T) {
+	db := openMySQLIntegrationDB(t)
+	ctx := context.Background()
+
+	const dbName = "gosq_mysql_ecommerce_test"
+
+	// Clean up any previous run, then create fresh database.
+	if _, err := db.ExecContext(ctx, "DROP DATABASE IF EXISTS "+dbName); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE DATABASE "+dbName); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP DATABASE IF EXISTS "+dbName)
+	})
+
+	// Load the DDL fixture via a dedicated connection with USE set.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "USE "+dbName); err != nil {
+		t.Fatalf("use database: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/mysql_ecommerce.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	for _, stmt := range splitMySQLStatements(string(ddl)) {
+		n := len(stmt)
+		if n > 50 {
+			n = 50
+		}
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("load fixture (%q): %v", stmt[:n], err)
+		}
+	}
+
+	tables, err := introspect.Tables(ctx, db, dbName, introspect.DialectMySQL)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+
+	// Must return exactly 2 base tables, sorted alphabetically: orders, users.
+	if len(tables) != 2 {
+		names := make([]string, len(tables))
+		for i, tbl := range tables {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("expected 2 tables, got %d: %v", len(tables), names)
+	}
+	if tables[0].Name != "orders" {
+		t.Errorf("tables[0].Name = %q, want %q", tables[0].Name, "orders")
+	}
+	if tables[1].Name != "users" {
+		t.Errorf("tables[1].Name = %q, want %q", tables[1].Name, "users")
+	}
+
+	// Verify schema field is set correctly on each table.
+	for _, tbl := range tables {
+		if tbl.Schema != dbName {
+			t.Errorf("table %q: Schema = %q, want %q", tbl.Name, tbl.Schema, dbName)
+		}
+	}
+
+	// Spot-check users: name column must be nullable, others must not be.
+	users := tables[1]
+	if len(users.Columns) != 4 {
+		t.Fatalf("users: expected 4 columns, got %d", len(users.Columns))
+	}
+	wantUsers := []struct {
+		name     string
+		nullable bool
+	}{
+		{"id", false},
+		{"email", false},
+		{"name", true},
+		{"created_at", false},
+	}
+	for i, wc := range wantUsers {
+		col := users.Columns[i]
+		if col.Name != wc.name {
+			t.Errorf("users.Columns[%d].Name = %q, want %q", i, col.Name, wc.name)
+		}
+		if col.IsNullable != wc.nullable {
+			t.Errorf("users.Columns[%d].IsNullable = %v, want %v (column %q)", i, col.IsNullable, wc.nullable, col.Name)
+		}
+	}
+
+	// Run the full pipeline: introspect → codegen → compile.
+	src, err := codegen.Generate(tables, codegen.Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	dir := t.TempDir()
+
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	write(filepath.Join(dir, "gosqstub", "go.mod"), "module github.com/libliflin/gosq\n\ngo 1.22\n")
+	write(filepath.Join(dir, "gosqstub", "gosq.go"), `package gosq
+
+type Table struct{}
+type Field struct{}
+
+func NewTable(name string) Table { return Table{} }
+func NewField(name string) Field { return Field{} }
+`)
+	write(filepath.Join(dir, "schema", "schema.go"), string(src))
+	write(filepath.Join(dir, "go.mod"),
+		"module testmod\n\ngo 1.22\n\nrequire github.com/libliflin/gosq v0.0.1\n\nreplace github.com/libliflin/gosq => ./gosqstub\n")
+
+	cmd := exec.Command("go", "build", "./schema")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s\n\ngenerated source:\n%s", out, src)
+	}
+}
+
+// openMySQLIntegrationDB opens a MySQL connection using TEST_MYSQL_DSN and
+// skips the test if the variable is not set. The connection is closed via
+// t.Cleanup.
+func openMySQLIntegrationDB(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := os.Getenv("TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("TEST_MYSQL_DSN not set; skipping MySQL integration test")
+	}
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatalf("open mysql db: %v", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		t.Fatalf("ping mysql db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// splitMySQLStatements splits a SQL string on semicolons into individual
+// statements for MySQL execution, which does not support multi-statement
+// queries by default. Empty lines and comment-only segments are skipped.
+func splitMySQLStatements(sql string) []string {
+	var stmts []string
+	for _, stmt := range strings.Split(sql, ";") {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
+		}
+		stmts = append(stmts, stmt)
+	}
+	return stmts
 }
 
 // TestPipelineEcommerce runs the full pipeline end-to-end:
