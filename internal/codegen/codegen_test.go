@@ -634,6 +634,68 @@ func NewField(name string) Field { return Field{} }
 	}
 }
 
+// TestGenerateCompilesNoDotImport verifies that the output of Generate with
+// DotImport: false is valid, compilable Go source. This exercises the
+// gosq.NewTable / gosq.NewField qualified-name path that users trigger with
+// the --dot-import=false flag.
+func TestGenerateCompilesNoDotImport(t *testing.T) {
+	tables := []introspect.Table{
+		{Schema: "public", Name: "users", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "email", DataType: "text", OrdinalPos: 2},
+			{Name: "api_key", DataType: "text", OrdinalPos: 3},
+			{Name: "created_at", DataType: "timestamp", OrdinalPos: 4},
+		}},
+		{Schema: "public", Name: "orders", Columns: []introspect.Column{
+			{Name: "id", DataType: "integer", OrdinalPos: 1},
+			{Name: "user_id", DataType: "integer", OrdinalPos: 2},
+			{Name: "total", DataType: "numeric", OrdinalPos: 3},
+		}},
+	}
+
+	src, err := Generate(tables, Config{Package: "schema", DotImport: false})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	dir := t.TempDir()
+
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	// Minimal gosq stub — satisfies the qualified import without needing network access.
+	write(filepath.Join(dir, "gosqstub", "go.mod"),
+		"module github.com/libliflin/gosq\n\ngo 1.22\n")
+	write(filepath.Join(dir, "gosqstub", "gosq.go"), `package gosq
+
+type Table struct{}
+type Field struct{}
+
+func NewTable(name string) Table { return Table{} }
+func NewField(name string) Field { return Field{} }
+`)
+
+	// Generated schema package.
+	write(filepath.Join(dir, "schema", "schema.go"), string(src))
+
+	// Root module that replaces gosq with the local stub.
+	write(filepath.Join(dir, "go.mod"),
+		"module testmod\n\ngo 1.22\n\nrequire github.com/libliflin/gosq v0.0.1\n\nreplace github.com/libliflin/gosq => ./gosqstub\n")
+
+	cmd := exec.Command("go", "build", "./schema")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s", out)
+	}
+}
+
 func TestGenerateFieldPriorTableCollision(t *testing.T) {
 	// Table "_users_name" has a leading underscore, so it sorts before "users"
 	// alphabetically ('_' ASCII 95 < 'u' ASCII 117). Its identifier is
