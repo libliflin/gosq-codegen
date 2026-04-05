@@ -32,5 +32,5 @@ jobs:
       - run: go test -tags integration ./...
         env:
           TEST_DSN: postgres://postgres:test@localhost:5432/testdb?sslmode=disable
-      - run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
       - run: staticcheck ./...

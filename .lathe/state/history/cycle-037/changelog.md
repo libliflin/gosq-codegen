@@ -2,6 +2,65 @@
 
 ---
 
+# Changelog — Cycle 41
+
+## Who This Helps
+- **Stakeholder:** contributors
+- **Impact:** CI no longer installs a fresh, unknown version of staticcheck on every run. Pinning to `v0.5.1` means CI won't silently break when `@latest` introduces new warnings or removes old ones — a CI failure that looks like a code regression but is actually a tool update. The module download is also cached by `actions/setup-go@v5`, reducing install time on subsequent runs.
+
+## Observed
+- `.github/workflows/ci.yml` used `go install honnef.co/go/tools/cmd/staticcheck@latest` — a moving target that installs a different version on each cache miss.
+- `@latest` is unversioned: a new staticcheck release adding a new check could break CI without any code change in this repo.
+- The changelog and architecture docs both called this out as a known CI quality gap.
+
+## Applied
+- Changed `@latest` to `@v0.5.1` (staticcheck 2024.1.1 — latest version compatible with go 1.22 from `go.mod`).
+- **File:** `.github/workflows/ci.yml`
+
+## Validated
+```
+go build ./...    — OK
+go test ./...     — OK
+go vet ./...      — OK
+staticcheck ./... — OK (v0.5.1, clean)
+```
+
+## Next
+- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026. Not urgent yet.
+- All core correctness and infrastructure work is done. Further improvements should be driven by real user feedback.
+
+---
+
+# Changelog — Cycle 40
+
+## Who This Helps
+- **Stakeholder:** contributors and CI
+- **Impact:** CI was failing on every push with `import cycle not allowed in test`. The integration test (`TestTablesEcommerce`, `TestPipelineEcommerce`) added in cycle 38/39 was declared as `package introspect` and imported `internal/codegen`, which itself imports `internal/introspect` — a cycle. No test was running. This fix restores CI to passing.
+
+## Observed
+- CI run #24002047580 failed with: `imports github.com/libliflin/gosq-codegen/internal/introspect: import cycle not allowed in test`
+- The integration test file used `package introspect` (internal package), not `package introspect_test` (external test package)
+- Because `codegen` imports `introspect`, adding a `codegen` import inside the `introspect` package created the cycle
+
+## Applied
+- Changed `package introspect` → `package introspect_test` in `internal/introspect/integration_test.go`
+- Added explicit `introspect` import so the tests can call `introspect.Tables(...)`
+- **File:** `internal/introspect/integration_test.go`
+- **PR:** https://github.com/libliflin/gosq-codegen/pull/8
+
+## Validated
+```
+go build -tags integration ./...   — OK
+go test ./...                      — OK
+go vet ./...                       — OK
+```
+
+## Next
+- CI should now pass with the integration tests running against the Postgres service. Once PR #8 merges, the full integration test suite is active.
+- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026.
+
+---
+
 # Changelog — Cycle 39
 
 ## Who This Helps
