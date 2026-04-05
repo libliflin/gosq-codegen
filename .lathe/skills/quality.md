@@ -39,7 +39,7 @@ The current `toExported` function is:
 
 **When to change `toExported`:** A user reports that a real column name produces a wrong or non-compilable identifier. Fix it, test it, document it as a naming change.
 
-**The current initialism list:** `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`. Adding a new initialism is a breaking change for users who have the corresponding column names — document it.
+**The current initialism list:** `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`. Adding a new initialism is a breaking change for users who have the corresponding column names — document it. The list is tested via 43 subtests in `TestToExported`, including consecutive initialism cases (`api_id` → `APIID`, `oauth_api_url` → `OauthAPIURL`) and numeric version segments (`order_v2` → `OrderV2`).
 
 ---
 
@@ -62,14 +62,15 @@ return nil, fmt.Errorf("identifier collision detected")
 
 ## Collision detection covers all four cases
 
-As of cycle 28, `Generate` detects all four ways identifier collisions can surface in generated output:
+As of cycle 32, `Generate` detects all five ways identifier collisions can surface in generated output:
 
 1. Two tables produce the same `TableIdent` (e.g. `user_data` and `user__data` → both `UserData`)
 2. Two columns in the same table produce the same `ColIdent`
 3. Two different table+column pairs produce the same full field ident (`TableIdent + ColIdent`) across tables
-4. A table's ident matches a field ident from another table (e.g. table `users_id` and field `users.id` → both `UsersID`)
+4. A table's ident matches a field ident from a previously-processed table (e.g. table `users_id` and field `users.id` → both `UsersID`)
+5. A field ident matches a table ident registered in an earlier iteration — table `_users_name` (sorts before `users`) registers ident `UsersName`; field `users.name` then collides with it
 
-All four are caught before rendering. Don't weaken this — silent identifier collisions produce generated Go that fails the user's build with a confusing `DO NOT EDIT` file as the locus.
+All five are caught before rendering. Don't weaken this — silent identifier collisions produce generated Go that fails the user's build with a confusing `DO NOT EDIT` file as the locus.
 
 ---
 

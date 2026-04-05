@@ -26,38 +26,47 @@ They open `schema/schema.go`, see their tables and columns as clean Go identifie
 
 **What would make them leave:** Generated code that doesn't compile. A table with an unusual column name causing a panic or cryptic format error. Spurious diffs between runs. Identifiers that conflict with Go conventions in ways that break their builds.
 
-**Where the project currently stands (after cycle 28):** The core case works well. The tool handles:
+**Where the project currently stands (after cycle 32):** The core is solid and well-tested. The tool handles:
 - Common `snake_case` patterns (`users.id` → `UsersID`, `orders.created_at` → `OrdersCreatedAt`)
-- Non-ASCII column names starting with multi-byte UTF-8 characters (fixed cycle 24 — rune-slicing instead of byte-slicing)
+- Non-ASCII column names starting with multi-byte UTF-8 characters (fixed cycle 24)
 - Digit-prefixed column names (`2fa_enabled` → `_2faEnabled`)
 - All-underscore column names (`___` → `_` suffix in field ident)
 - Blank-identifier table names (`_`, `__` — errors early with a clear message)
-- All four types of identifier collision: table-table, column-column, field-field (cross-table), and table-field
+- All five types of identifier collision: table-table, column-column, field-field (cross-table), table-field, and field-vs-prior-table
 - Package name validation before connecting to the database
 - View filtering (`table_type = 'BASE TABLE'`)
 - 30-second context timeout
+- Consecutive initialisations (`api_id` → `APIID`, `oauth_api_url` → `OauthAPIURL`)
+- Numeric version segments (`order_v2` → `OrderV2`, `api_v2` → `APIV2`)
+- Production-scale schemas — tested at 17 tables and 108 columns with diverse naming patterns
 
-**The remaining uncertainty:** The test suite uses small, clean, hand-crafted inputs (2-3 tables, 1-3 columns each). Production databases don't look like that. A real user's schema might have 80 tables, 500 columns, a mix of `snake_case`, `camelCase` (quoted in Postgres), numeric prefixes, and initialism-heavy names. This hasn't been tested against anything at that scale or variety. Does the tool behave correctly and produce no surprises at that scale? Unknown.
-
-**The most important unanswered question:** Would this tool handle a real user's production schema without surprises, at production scale?
+**The remaining gap:** There is no CI/CD. The project has no `.github/workflows/` directory. Every change is verified only locally, and every merge is unverified automatically. The tool's correctness is solid, but the infrastructure that would give contributors and users confidence in future changes doesn't exist.
 
 ### Maintainers / Contributors
 
 Developers working on gosq-codegen itself — currently the author.
 
-**First encounter:** They clone the repo. The pipeline is clean: `internal/introspect` queries `information_schema.columns`, returns `[]Table`. `internal/codegen` renders `[]Table` into Go source. `main.go` is a tight CLI that wires flags to the pipeline. Tests in `codegen_test.go` have 12 test functions (including 32 subtests in `TestToExported`) covering 98.5% of the codegen package.
+**First encounter:** They clone the repo. The pipeline is clean: `internal/introspect` queries `information_schema.columns`, returns `[]Table`. `internal/codegen` renders `[]Table` into Go source. `main.go` is a tight CLI that wires flags to the pipeline. Tests in `codegen_test.go` have 16 test functions (including 43 subtests in `TestToExported`) covering 98.6% of the codegen package.
 
 **What success looks like:** Adding support for a new edge case is a small, targeted change. Tests fail when output is wrong. Error messages point to the cause, not an internal line number.
 
-**What builds trust:** Tests that document behavior for unusual inputs. Clear package boundaries. Errors that include the table/column causing the problem. Consistent patterns they can follow for new additions.
+**What builds trust:** Tests that document behavior for unusual inputs. Clear package boundaries. Errors that include the table/column causing the problem. Consistent patterns they can follow for new additions. CI that runs automatically on every push.
 
-**Where the project currently stands:** Solid. The `introspect_test.go` file correctly contains only `package introspect` — the package's only logic (`Tables`) requires a live database. No misleading test stubs.
+**Where the project currently stands:** Very solid on code quality, test coverage, and correctness. The missing piece is automated validation: without CI, a contributor submitting a PR has no automated signal that their change passes tests. That gap is the highest-value thing to address next.
 
 ### The gosq project itself
 
 gosq-codegen is a proof-of-concept for gosq's `NewTable`/`NewField` API. If the generated code is awkward, wrong, or fails on real schemas, it's a signal about gosq's design. A working, robust generator validates the library from the outside.
 
 This stakeholder benefits silently when gosq-codegen works well. It has no day-to-day needs.
+
+### Validation infrastructure
+
+**Current state:** No CI/CD at all. No `.github/workflows/` directory, no Makefile, no other automated pipeline. Tests are run manually and locally. The project's 98.6% coverage and clean vet/staticcheck status are verified only on the author's machine.
+
+**What this means for stakeholders:** Every stakeholder is trusting unverified changes. A contributor who submits a PR gets no automated feedback. A user installing `@latest` has no guarantee that the released version passed its own tests in CI. This is the single most significant infrastructure gap.
+
+**Repository security for autonomous operation:** The repo has no `.github/` directory — no workflows exist, so there are no `pull_request_target` or `issue_comment` triggers that could be exploited for privilege escalation. The engine fetches only structured data (statuses, numbers, booleans) from GitHub, never free-text fields. However, with no branch protection configured (not verifiable without GitHub API access), the default branch may be directly pushable — a risk to document and ask the user to fix before running many cycles autonomously. The repo appears public given `go install github.com/libliflin/gosq-codegen@latest` in the README; public repos have higher injection risk from external PR/issue spam.
 
 Every cycle, ask: **which stakeholder's journey can I make noticeably better right now, and where?**
 
@@ -103,27 +112,33 @@ Each cycle:
 
 The "pick" step is an act of empathy. You're not grinding through a queue — you're asking what would make the biggest real difference to the person who just found this project.
 
-**The bias to watch for:** When everything passes and looks clean, the temptation is to polish — README tweaks, doc alignment, minor refactors. Each one is small and correct. But the stakeholder doesn't need a prettier README. They need confidence the tool handles their real-world schema at real-world scale. If you haven't built a test with 15+ tables and 100+ columns with diverse naming patterns, that uncertainty is the next cycle — not another doc improvement.
-
-The highest-value change is often something that doesn't exist yet — a test fixture that would catch a real bug, an edge case nobody has tried, an input shape that mimics actual production use. You can always build realistic test inputs yourself: you don't need a live database to construct a `[]introspect.Table` with 15 tables, 100 columns, mixed naming styles, initialisations, numeric prefixes, and non-ASCII names.
+**The bias to watch for:** After 32 cycles of test and correctness work, the temptation is to keep adding tests that cover the same ground. But the stakeholder gaps are now higher-level: the tool produces correct output but there's no automated verification of that correctness in CI. A new test for a pattern that's already well-covered is lower value than CI that runs the existing tests automatically.
 
 ---
 
 ## What Matters Now
 
-The project has gone through 28 cycles. The core works and all known correctness gaps have been addressed. The questions are no longer about whether known edge cases compile — they're about whether the tool survives contact with a real production database:
+The project has gone through 32 cycles. The correctness work is essentially complete:
 
-- **Scale stress-testing.** The test suite uses 2-3 tables, 1-3 columns each. A real user's schema has 50-200 tables, many with 20-50 columns. Does collision detection, sorting, and output formatting work correctly at that scale? Is the output still deterministic? Does anything unexpected happen when table count is large? You can test this right now: build a `[]introspect.Table` with 15-20 tables, 8-12 columns each, diverse naming patterns, and run `Generate`. No live database needed.
+- All five collision types are detected and tested
+- `TestToExported` has 43 subtests covering all initialisms, edge cases, consecutive initialisations, and numeric version segments
+- `TestGenerateProductionScale` exercises 17 tables and 108 columns with diverse naming patterns
+- Coverage is 98.6% — the only uncovered code is the `format.Source` error path (unreachable)
+- `go vet` and `staticcheck` are clean
 
-- **Diverse naming patterns at scale.** The test suite covers ASCII snake_case, one non-ASCII case (`éclat`), one digit-prefix case (`2fa_enabled`), and a handful of collision cases. A production schema might have: `camelCase` columns (quoted in Postgres), columns with numbers in the middle (`order_123_status`), mixed initialism patterns (`oauth_api_url`), or very long names (up to 63 chars per Postgres limit). Have any of these been tested together in a realistic schema? No.
+The questions that remain are infrastructure and robustness, not correctness for known inputs:
 
-- **Non-public schema behavior.** The `-schema` flag passes the schema name to the query correctly, but this has only been tested conceptually. A user running `gosq-codegen -schema reporting` or `-schema myapp` should get the same quality output as a `public` schema user. Does the tool produce correct output? Does the warning message correctly name the non-public schema if it's empty?
+- **CI/CD is missing.** There is no `.github/workflows/` directory. Creating a minimal GitHub Actions workflow — one that runs `go build ./...`, `go test ./...`, and `go vet ./...` on push and pull_request — is the single highest-value change available. It doesn't need to be perfect on day one; a minimal, fast CI workflow is better than none. The agent can improve it incrementally (add staticcheck, add coverage reporting) in later cycles.
 
-- **`staticcheck` clean?** `go vet` is clean. `staticcheck` checks additional patterns — unused exports, deprecated calls, incorrect usage of standard library. Is it clean? Run it if available.
+- **Non-public schema behavior.** The `-schema` flag passes the schema name to the query correctly, but the generated output doesn't include the schema name anywhere. Two schemas that share table names would produce identical generated identifiers. Is this the right behavior? Is it documented? A user running `-schema reporting` alongside `-schema public` might be surprised. This is worth either documenting clearly or adding a warning for.
 
-- **Blank field identifiers from column names.** A column named `_` in table `items` produces `toExported("_") = "_"` for the column part, making the full field ident `Items_`. This is a valid exported identifier. But is the behavior documented? A test for this case would make the contract explicit.
+- **`staticcheck` is clean but not in CI.** Even once CI exists, adding staticcheck requires it to be installed — a GitHub Actions workflow can use `honnef.co/go/tools/cmd/staticcheck` or the `staticcheck-action`. Incremental.
 
-None of these are urgent. But the scale/diversity question is the one most likely to reveal a real gap for a real user.
+- **The `format.Source` error path** is the only uncovered code (1.4%). It's unreachable from any valid input and not worth testing. This is not a gap.
+
+None of these are about adding more unit tests for `toExported` patterns. That work is done.
+
+**The right question now:** what would make a contributor confident that their PR didn't break anything, without running anything locally?
 
 Never treat any list — in a README, an issue, or a snapshot — as a queue to grind through. Lists are context.
 
@@ -159,11 +174,11 @@ Each cycle makes exactly one improvement. If you try to do two things you'll do 
 
 **Building something whose prerequisite doesn't exist.** Don't add integration test infrastructure before verifying there's a meaningful gap to cover.
 
-**Polishing internals users never see.** `toExported` is an internal function. Its implementation is correct and tested. Don't refactor for aesthetics.
+**Polishing internals users never see.** `toExported` is an internal function. Its implementation is correct, well-tested with 43 cases. Don't refactor for aesthetics.
 
-**Fidgeting instead of stress-testing.** After 28 cycles, the correctness gaps for small inputs are closed. But the tool has never been exercised against inputs that look like real production schemas — large, diverse, messy. Each polish cycle you do instead of building realistic test inputs is a cycle where you avoid finding the real gap. You can always construct realistic test inputs yourself — build a `[]introspect.Table` with 15 tables, 100 columns, and diverse naming patterns right now. Ask: "have I tested this against inputs that look like what a real user would feed it?" If not, that's the cycle.
+**Grinding `TestToExported` past 43 cases when CI doesn't exist.** The initialism coverage is thorough. Adding more `toExported` subtests when there's no CI to run them automatically is polishing the wrong surface. The contributor who submits a PR doesn't have automated confidence — that's the gap to fix.
 
-When in doubt: would a gosq user with a real production schema notice this change?
+When in doubt: would a gosq user with a real production schema notice this change? Would a contributor making a PR get better automated feedback?
 
 ---
 
@@ -192,6 +207,21 @@ Write to `.lathe/state/changelog.md` (prepend each new cycle's entry):
 ## Next
 - What would make the biggest difference next
 ```
+
+---
+
+## Working with CI/CD and PRs
+
+The lathe runs on a branch and uses PRs to trigger CI. The engine provides session context (current branch, PR number, CI status) in the prompt each cycle. The runtime agent works within this model:
+
+- Commit and push to the session branch. Create PRs with `gh pr create` and merge with `gh pr merge --squash` when CI passes.
+- CI failures are top priority. When CI fails, the next cycle should fix it before doing anything else.
+- CI that takes too long (>2 minutes) is itself a problem — fast CI means faster feedback.
+- **If there is no CI configuration at all (as is currently the case), creating one is the single highest-value change the agent can make.** Start minimal: a GitHub Actions workflow that runs `go build ./...`, `go test ./...`, and `go vet ./...`. The agent can improve CI incrementally in later cycles — don't try to build the perfect pipeline on day one.
+- External CI failures (dependency outages, vulnerability scanners, upstream breakage) require judgment. Explain reasoning in the changelog: is this worth a workaround? A separate fix? Or should it keep working and let the external issue resolve?
+- When a PR is merged, create a new branch and PR for the next batch of work.
+
+The PR/CI workflow is part of the job, not something happening around it.
 
 ---
 
