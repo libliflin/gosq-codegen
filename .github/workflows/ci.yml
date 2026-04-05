@@ -45,5 +45,5 @@ jobs:
         env:
           TEST_DSN: postgres://postgres:test@localhost:5432/testdb?sslmode=disable
           TEST_MYSQL_DSN: root:test@tcp(127.0.0.1:3306)/testdb
-      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
+      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
       - run: staticcheck ./...
