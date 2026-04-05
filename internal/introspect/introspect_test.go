@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -29,22 +30,60 @@ func newMockDB(t *testing.T, rows [][]driver.Value) *sql.DB {
 	return db
 }
 
+// newMockRowsErrDB registers a mock driver that returns nextErr from rows.Next
+// after exhausting all data rows (instead of io.EOF). This triggers rows.Err().
+func newMockRowsErrDB(t *testing.T, rows [][]driver.Value, nextErr error) *sql.DB {
+	t.Helper()
+	name := fmt.Sprintf("introspect_mock_%d", driverSeq.Add(1))
+	sql.Register(name, &mockDriver{rows: rows, nextErr: nextErr})
+	db, err := sql.Open(name, "mock")
+	if err != nil {
+		t.Fatalf("sql.Open mock: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// newMockQueryErrDB registers a mock driver that returns queryErr from every
+// Query call, simulating a database connection or query failure.
+func newMockQueryErrDB(t *testing.T, queryErr error) *sql.DB {
+	t.Helper()
+	name := fmt.Sprintf("introspect_mock_%d", driverSeq.Add(1))
+	sql.Register(name, &mockQueryErrDriver{err: queryErr})
+	db, err := sql.Open(name, "mock")
+	if err != nil {
+		t.Fatalf("sql.Open mock: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
 // --- minimal mock driver (stdlib only) ---
 
-type mockDriver struct{ rows [][]driver.Value }
-type mockConn struct{ rows [][]driver.Value }
-type mockStmt struct{ rows [][]driver.Value }
+type mockDriver struct {
+	rows    [][]driver.Value
+	nextErr error // returned by Next after all data rows, instead of io.EOF
+}
+type mockConn struct {
+	rows    [][]driver.Value
+	nextErr error
+}
+type mockStmt struct {
+	rows    [][]driver.Value
+	nextErr error
+}
 type mockRows struct {
-	data [][]driver.Value
-	pos  int
+	data    [][]driver.Value
+	pos     int
+	nextErr error
 }
 
 func (d *mockDriver) Open(_ string) (driver.Conn, error) {
-	return &mockConn{rows: d.rows}, nil
+	return &mockConn{rows: d.rows, nextErr: d.nextErr}, nil
 }
 
 func (c *mockConn) Prepare(_ string) (driver.Stmt, error) {
-	return &mockStmt{rows: c.rows}, nil
+	return &mockStmt{rows: c.rows, nextErr: c.nextErr}, nil
 }
 func (c *mockConn) Close() error              { return nil }
 func (c *mockConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("not supported") }
@@ -53,7 +92,7 @@ func (s *mockStmt) Close() error                                 { return nil }
 func (s *mockStmt) NumInput() int                                { return -1 }
 func (s *mockStmt) Exec(_ []driver.Value) (driver.Result, error) { return nil, fmt.Errorf("not supported") }
 func (s *mockStmt) Query(_ []driver.Value) (driver.Rows, error) {
-	return &mockRows{data: s.rows}, nil
+	return &mockRows{data: s.rows, nextErr: s.nextErr}, nil
 }
 
 func (r *mockRows) Columns() []string {
@@ -62,12 +101,35 @@ func (r *mockRows) Columns() []string {
 func (r *mockRows) Close() error { return nil }
 func (r *mockRows) Next(dest []driver.Value) error {
 	if r.pos >= len(r.data) {
+		if r.nextErr != nil {
+			return r.nextErr
+		}
 		return io.EOF
 	}
 	copy(dest, r.data[r.pos])
 	r.pos++
 	return nil
 }
+
+// mockQueryErrDriver returns an error from every Query call.
+type mockQueryErrDriver struct{ err error }
+type mockQueryErrConn struct{ err error }
+type mockQueryErrStmt struct{ err error }
+
+func (d *mockQueryErrDriver) Open(_ string) (driver.Conn, error) {
+	return &mockQueryErrConn{err: d.err}, nil
+}
+func (c *mockQueryErrConn) Prepare(_ string) (driver.Stmt, error) {
+	return &mockQueryErrStmt{err: c.err}, nil
+}
+func (c *mockQueryErrConn) Close() error              { return nil }
+func (c *mockQueryErrConn) Begin() (driver.Tx, error) { return nil, fmt.Errorf("not supported") }
+func (s *mockQueryErrStmt) Close() error              { return nil }
+func (s *mockQueryErrStmt) NumInput() int              { return -1 }
+func (s *mockQueryErrStmt) Exec(_ []driver.Value) (driver.Result, error) {
+	return nil, fmt.Errorf("not supported")
+}
+func (s *mockQueryErrStmt) Query(_ []driver.Value) (driver.Rows, error) { return nil, s.err }
 
 // TestTablesEmpty verifies that Tables returns an empty slice (not an error) when
 // the schema contains no base tables.
@@ -159,5 +221,50 @@ func TestTablesSchemaAndOrdinal(t *testing.T) {
 		if col.OrdinalPos != i+1 {
 			t.Errorf("Columns[%d].OrdinalPos = %d, want %d", i, col.OrdinalPos, i+1)
 		}
+	}
+}
+
+// TestTablesQueryError verifies that Tables wraps and propagates errors from
+// db.QueryContext, so callers see a meaningful error message.
+func TestTablesQueryError(t *testing.T) {
+	db := newMockQueryErrDB(t, fmt.Errorf("connection refused"))
+	_, err := Tables(context.Background(), db, "public")
+	if err == nil {
+		t.Fatal("expected error from Tables when QueryContext fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "query information_schema") {
+		t.Errorf("error %q should mention %q", err.Error(), "query information_schema")
+	}
+}
+
+// TestTablesScanError verifies that Tables returns a wrapped error when a row
+// cannot be scanned. An incompatible type for ordinal_position triggers this path.
+func TestTablesScanError(t *testing.T) {
+	rows := [][]driver.Value{
+		// "not-a-number" cannot be converted to int, causing rows.Scan to fail.
+		{"users", "id", "integer", "NO", "not-a-number"},
+	}
+	db := newMockDB(t, rows)
+	_, err := Tables(context.Background(), db, "public")
+	if err == nil {
+		t.Fatal("expected error from Tables when Scan fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "scan row") {
+		t.Errorf("error %q should mention %q", err.Error(), "scan row")
+	}
+}
+
+// TestTablesRowsIterationError verifies that Tables returns a wrapped error when
+// rows.Err() is non-nil after iteration — e.g. a network failure mid-result-set.
+func TestTablesRowsIterationError(t *testing.T) {
+	iterErr := fmt.Errorf("network error during iteration")
+	// No data rows; the error fires on the first Next call.
+	db := newMockRowsErrDB(t, nil, iterErr)
+	_, err := Tables(context.Background(), db, "public")
+	if err == nil {
+		t.Fatal("expected error from Tables when rows iteration fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "iterate rows") {
+		t.Errorf("error %q should mention %q", err.Error(), "iterate rows")
 	}
 }
