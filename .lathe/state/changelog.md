@@ -2,6 +2,35 @@
 
 ---
 
+# Changelog — Cycle 44
+
+## Who This Helps
+- **Stakeholder:** the lathe engine and contributors
+- **Impact:** PR #9 was showing as CONFLICTING on GitHub because main progressed (PR #6 merged integration tests) while our branch was still based on the old `lathe/20260405-084607` base. Rebasing onto the current main restores mergeability so the engine can auto-merge when CI passes.
+
+## Observed
+- Both PR #7 and PR #9 showed `"mergeStateStatus":"DIRTY","mergeable":"CONFLICTING"` in the snapshot.
+- `origin/main` had advanced to `c4df5fb` ("add integration tests for introspect.Tables against real Postgres in CI (#6)") while our branch was still based on `lathe/20260405-084607`.
+- A local `git rebase origin/main` test succeeded cleanly — the original integration test commit was dropped as already upstream, and all subsequent commits applied without conflict.
+
+## Applied
+- Rebased `lathe/20260405-100731` onto `origin/main` with `git rebase origin/main`.
+- Two already-upstream commits were automatically dropped (the original integration test commit and its cleanup commit).
+- Force-pushed to `origin/lathe/20260405-100731` to update the PR base.
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK
+go vet ./...     — OK
+```
+
+## Next
+- PR #9 should now be mergeable. Once CI passes and the engine merges it, all the accumulated integration work (staticcheck pin, non-ASCII test, schema isolation test, Node.js 22 Actions) will be in main.
+- After that merge, all known gaps are closed. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 43
 
 ## Who This Helps
