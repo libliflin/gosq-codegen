@@ -451,18 +451,18 @@ func TestPipelineProductionScale(t *testing.T) {
 	generated := string(src)
 
 	// Spot-check that key naming-pattern identifiers are present.
-	// api_keys.api_key   → ApiKeysAPIKey         (initialism)
-	// http_logs.url      → HttpLogsURL            (initialism)
-	// http_logs.ip_addr  → HttpLogsIPAddr         (initialism)
-	// http_logs.http_status_code → HttpLogsHTTPStatusCode (consecutive)
-	// sessions.user_uuid → SessionsUserUUID       (consecutive)
-	// users.2fa_enabled  → Users_2faEnabled       (digit-prefixed)
+	// api_keys.api_key   → APIKeysAPIKey          (api → API initialism; table APIKeys + col APIKey)
+	// http_logs.url      → HTTPLogsURL            (http → HTTP initialism)
+	// http_logs.ip_addr  → HTTPLogsIPAddr         (ip → IP initialism)
+	// http_logs.http_status_code → HTTPLogsHTTPStatusCode (consecutive initialisations)
+	// sessions.user_uuid → SessionsUserUUID       (consecutive initialisations)
+	// users.2fa_enabled  → Users_2faEnabled       (digit-prefixed column)
 	wantIdents := []string{
 		"Users_2faEnabled",
-		"ApiKeysAPIKey",
-		"HttpLogsHTTPStatusCode",
-		"HttpLogsURL",
-		"HttpLogsIPAddr",
+		"APIKeysAPIKey",
+		"HTTPLogsHTTPStatusCode",
+		"HTTPLogsURL",
+		"HTTPLogsIPAddr",
 		"SessionsUserUUID",
 	}
 	for _, ident := range wantIdents {
