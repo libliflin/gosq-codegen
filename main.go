@@ -37,14 +37,16 @@ import (
 
 	"github.com/libliflin/gosq-codegen/internal/codegen"
 	"github.com/libliflin/gosq-codegen/internal/introspect"
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	dsn := flag.String("dsn", "", "PostgreSQL connection string (required)")
+	driver := flag.String("driver", "postgres", "database driver: postgres or mysql")
+	dsn := flag.String("dsn", "", "database connection string (required)")
 	out := flag.String("out", "schema/", "output directory")
 	pkg := flag.String("pkg", "schema", "Go package name for generated file")
-	schema := flag.String("schema", "public", "PostgreSQL schema to introspect")
+	schema := flag.String("schema", "public", "schema to introspect (MySQL: use database name)")
 	dotImport := flag.Bool("dot-import", true, "use dot-import for gosq (import . \"github.com/libliflin/gosq\")")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
@@ -64,13 +66,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	var dialect introspect.Dialect
+	switch *driver {
+	case "postgres":
+		dialect = introspect.DialectPostgres
+	case "mysql":
+		dialect = introspect.DialectMySQL
+	default:
+		fmt.Fprintf(os.Stderr, "gosq-codegen: unsupported driver %q (supported: postgres, mysql)\n", *driver)
+		os.Exit(1)
+	}
+
 	if *dsn == "" {
 		fmt.Fprintln(os.Stderr, "gosq-codegen: -dsn is required")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	db, err := sql.Open("postgres", *dsn)
+	db, err := sql.Open(*driver, *dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: open db: %v\n", err)
 		os.Exit(1)
@@ -80,7 +93,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	tables, err := introspect.Tables(ctx, db, *schema)
+	tables, err := introspect.Tables(ctx, db, *schema, dialect)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: introspect: %v\n", err)
 		os.Exit(1)

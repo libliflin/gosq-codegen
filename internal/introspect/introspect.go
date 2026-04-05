@@ -9,6 +9,16 @@ import (
 	"sort"
 )
 
+// Dialect identifies the SQL dialect used for parameterized queries.
+type Dialect string
+
+const (
+	// DialectPostgres uses $1 positional placeholders (PostgreSQL, CockroachDB).
+	DialectPostgres Dialect = "postgres"
+	// DialectMySQL uses ? positional placeholders (MySQL, MariaDB).
+	DialectMySQL Dialect = "mysql"
+)
+
 // Table represents a database table and its columns.
 type Table struct {
 	Schema  string
@@ -24,15 +34,20 @@ type Column struct {
 	OrdinalPos int
 }
 
-// Tables queries information_schema.columns and returns all tables in the given
-// schema, sorted by table name with columns ordered by ordinal position.
-func Tables(ctx context.Context, db *sql.DB, schema string) ([]Table, error) {
-	const q = `
+// Tables queries information_schema.columns and returns all base tables in the
+// given schema, sorted by table name with columns ordered by ordinal position.
+// d selects the SQL placeholder style: DialectPostgres uses $1, DialectMySQL uses ?.
+func Tables(ctx context.Context, db *sql.DB, schema string, d Dialect) ([]Table, error) {
+	placeholder := "$1"
+	if d == DialectMySQL {
+		placeholder = "?"
+	}
+	q := `
 SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.ordinal_position
 FROM information_schema.columns c
 JOIN information_schema.tables t
   ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-WHERE c.table_schema = $1
+WHERE c.table_schema = ` + placeholder + `
   AND t.table_type = 'BASE TABLE'
 ORDER BY c.table_name, c.ordinal_position`
 
