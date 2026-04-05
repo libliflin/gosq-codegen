@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/libliflin/gosq-codegen/internal/codegen"
@@ -157,6 +158,99 @@ func TestTablesEcommerce(t *testing.T) {
 		if col.OrdinalPos != i+1 {
 			t.Errorf("users.Columns[%d].OrdinalPos = %d, want %d", i, col.OrdinalPos, i+1)
 		}
+	}
+}
+
+// TestTablesNonASCII loads the non_ascii DDL fixture and verifies that Tables
+// returns correct column names including those starting with multi-byte UTF-8
+// characters (e.g. "éditeur"). This exercises the rune-based path in
+// introspect — Postgres stores and returns the column name as UTF-8 text.
+func TestTablesNonASCII(t *testing.T) {
+	db := openIntegrationDB(t)
+	ctx := context.Background()
+
+	const schema = "gosq_nonascii_test"
+
+	if _, err := db.ExecContext(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE"); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	})
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+		t.Fatalf("set search_path: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/non_ascii.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	tables, err := introspect.Tables(ctx, db, schema)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+
+	if len(tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(tables))
+	}
+
+	articles := tables[0]
+	if articles.Name != "articles" {
+		t.Errorf("tables[0].Name = %q, want %q", articles.Name, "articles")
+	}
+
+	if len(articles.Columns) != 4 {
+		t.Fatalf("articles: expected 4 columns, got %d", len(articles.Columns))
+	}
+
+	wantCols := []struct {
+		name     string
+		nullable bool
+	}{
+		{"id", false},
+		{"éditeur", false},
+		{"prénom", true},
+		{"titre", false},
+	}
+	for i, wc := range wantCols {
+		col := articles.Columns[i]
+		if col.Name != wc.name {
+			t.Errorf("articles.Columns[%d].Name = %q, want %q", i, col.Name, wc.name)
+		}
+		if col.IsNullable != wc.nullable {
+			t.Errorf("articles.Columns[%d].IsNullable = %v, want %v", i, col.IsNullable, wc.nullable)
+		}
+		if col.OrdinalPos != i+1 {
+			t.Errorf("articles.Columns[%d].OrdinalPos = %d, want %d", i, col.OrdinalPos, i+1)
+		}
+	}
+
+	// The column "éditeur" starts with a 2-byte UTF-8 character. Verify that
+	// codegen produces the correct exported identifier without error.
+	src, err := codegen.Generate(tables, codegen.Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	generated := string(src)
+	if !strings.Contains(generated, "ArticlesÉditeur") {
+		t.Errorf("expected generated source to contain %q\ngot:\n%s", "ArticlesÉditeur", generated)
+	}
+	if !strings.Contains(generated, "ArticlesPrénom") {
+		t.Errorf("expected generated source to contain %q\ngot:\n%s", "ArticlesPrénom", generated)
 	}
 }
 
