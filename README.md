@@ -1,5 +1,7 @@
 # gosq-codegen
 
+[![CI](https://github.com/libliflin/gosq-codegen/actions/workflows/ci.yml/badge.svg)](https://github.com/libliflin/gosq-codegen/actions/workflows/ci.yml)
+
 Code generator for [gosq](https://github.com/libliflin/gosq) — introspects your PostgreSQL schema and generates type-safe Go table/field definitions.
 
 ## What it does
