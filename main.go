@@ -43,7 +43,7 @@ import (
 )
 
 func main() {
-	driver := flag.String("driver", "postgres", "database driver: postgres, mysql, or sqlite")
+	driver := flag.String("driver", "postgres", "database driver: postgres, cockroach, mysql, or sqlite")
 	dsn := flag.String("dsn", "", "database connection string (required)")
 	out := flag.String("out", "schema/", "output directory")
 	pkg := flag.String("pkg", "schema", "Go package name for generated file")
@@ -68,15 +68,22 @@ func main() {
 	}
 
 	var dialect introspect.Dialect
+	// sqlDriverName is the driver name passed to sql.Open. It differs from
+	// *driver when the user selects "cockroach": CockroachDB is PostgreSQL-
+	// wire-compatible, so we open it with the "postgres" driver.
+	sqlDriverName := *driver
 	switch *driver {
 	case "postgres":
 		dialect = introspect.DialectPostgres
+	case "cockroach":
+		dialect = introspect.DialectPostgres
+		sqlDriverName = "postgres"
 	case "mysql":
 		dialect = introspect.DialectMySQL
 	case "sqlite":
 		dialect = introspect.DialectSQLite
 	default:
-		fmt.Fprintf(os.Stderr, "gosq-codegen: unsupported driver %q (supported: postgres, mysql, sqlite)\n", *driver)
+		fmt.Fprintf(os.Stderr, "gosq-codegen: unsupported driver %q (supported: postgres, cockroach, mysql, sqlite)\n", *driver)
 		os.Exit(1)
 	}
 
@@ -86,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	db, err := sql.Open(*driver, *dsn)
+	db, err := sql.Open(sqlDriverName, *dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosq-codegen: open db: %v\n", err)
 		os.Exit(1)
