@@ -1,0 +1,92 @@
+# Project Snapshot
+Generated: Sun Apr  5 10:45:03 EDT 2026
+
+## Git Status
+ M .lathe/agent.md
+ M .lathe/alignment-summary.md
+ M .lathe/skills/architecture.md
+ M .lathe/skills/quality.md
+ M .lathe/skills/testing.md
+ M .lathe/state/cycle.json
+ M .lathe/state/lathe.pid
+ M .lathe/state/session.json
+?? .lathe/state/history/cycle-042/
+
+## Recent Commits (last 10)
+1279756 lathe: cycle cleanup (agent left uncommitted changes)
+01aab26 rebase onto main to resolve PR conflict
+8f5a160 lathe: cycle cleanup (agent left uncommitted changes)
+c135cfb update actions/checkout to v6.0.2 and actions/setup-go to v6.4.0 (Node.js 22)
+e896cea lathe: cycle cleanup (agent left uncommitted changes)
+e3b01f8 add TestTablesSchemaIsolation: verify introspect schema filter isolates multi-schema results
+ef1514c lathe: cycle cleanup (agent left uncommitted changes)
+101066e add non-ASCII integration test: verify éditeur → ArticlesÉditeur end-to-end
+9d51722 lathe: cycle cleanup (agent left uncommitted changes)
+8549fc7 pin staticcheck to v0.5.1 in CI for deterministic builds
+
+## Go Module
+module github.com/libliflin/gosq-codegen
+
+go 1.22
+
+## Build
+```
+OK — builds clean
+```
+
+## Tests
+```
+?   	github.com/libliflin/gosq-codegen	[no test files]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.210s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.296s [no tests to run]
+```
+
+## Vet
+```
+OK — vet clean
+```
+
+## Packages
+github.com/libliflin/gosq-codegen
+github.com/libliflin/gosq-codegen/internal/codegen
+github.com/libliflin/gosq-codegen/internal/introspect
+
+## Go Files
+./internal/codegen/codegen_test.go
+./internal/codegen/codegen.go
+./internal/introspect/integration_test.go
+./internal/introspect/introspect_test.go
+./internal/introspect/introspect.go
+./main.go
+
+## TODOs
+(none)
+
+## Coverage
+```
+	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.373s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.174s	coverage: 0.0% of statements [no tests to run]
+```
+
+## CI/CD Status
+Current branch: lathe/20260405-104503 (no PR created yet)
+
+### All Open PRs (by current user)
+```
+#7 [lathe/20260405-084607] state:OPEN checks:pass
+```
+
+### CI Configuration
+Workflows found:
+.github/workflows/ci.yml
+
+### Recent Workflow Runs
+```
+#24003565530 completed/success event:push branch:main at:2026-04-05T14:29:54
+#24003546480 completed/success event:pull_request branch:lathe/20260405-100731 at:2026-04-05T14:28:43
+#24003545901 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:28:41
+#24003536713 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:28:09
+#24003479352 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:24:39
+```
+
