@@ -2,37 +2,6 @@
 
 ---
 
-# Changelog — Cycle 41
-
-## Who This Helps
-- **Stakeholder:** gosq users with non-ASCII column names (accented characters, non-Latin scripts)
-- **Impact:** The rune-slicing fix (cycle 24) that made `éditeur` → `Éclat` work correctly had never been tested against a real Postgres database. `TestTablesNonASCII` now validates the full path: Postgres stores the column name as UTF-8 → `introspect.Tables` returns it correctly → `codegen.Generate` produces `ArticlesÉditeur` (not garbled bytes). If a future change accidentally reverts to byte-slicing, CI will catch it with a real DB.
-
-## Observed
-- `TestGenerateProductionScale` and `TestToExported` (with `{"éclat", "Éclat"}`) verified codegen in isolation with inline `[]introspect.Table`.
-- No integration test verified that Postgres actually returns column names with multi-byte UTF-8 characters intact, or that the pipeline handles them end-to-end.
-- The non-ASCII handling was the only cycle-24 correctness fix without a corresponding integration-tier test.
-
-## Applied
-- Created `testdata/schemas/non_ascii.sql`: DDL for an `articles` table with columns `éditeur` (NOT NULL, starts with 2-byte UTF-8 `é`), `prénom` (nullable, accent in middle), and `titre` (NOT NULL, ASCII).
-- Added `TestTablesNonASCII` to `internal/introspect/integration_test.go` (`//go:build integration`): loads the fixture, asserts column names and nullability from `Tables`, then calls `codegen.Generate` and asserts the output contains `ArticlesÉditeur` and `ArticlesPrénom`.
-- Added `"strings"` import (for `strings.Contains`).
-- **Files:** `testdata/schemas/non_ascii.sql`, `internal/introspect/integration_test.go`
-
-## Validated
-```
-go build ./...                    — OK
-go test ./...                     — OK (unit tests pass, no DB required)
-go vet ./...                      — OK
-go build -tags integration ./...  — OK (integration test file compiles)
-```
-
-## Next
-- Update `actions/checkout@v4` and `actions/setup-go@v5` to versions using Node.js 22 before GitHub's September 2026 deprecation cutover.
-- All known correctness and integration gaps are covered. Further improvements should be driven by real user feedback.
-
----
-
 # Changelog — Cycle 40
 
 ## Who This Helps
