@@ -2,6 +2,35 @@
 
 ---
 
+# Changelog — Cycle 43
+
+## Who This Helps
+- **Stakeholder:** contributors and maintainers
+- **Impact:** The CI workflow no longer uses Node.js 20, which GitHub has announced will be deprecated for Actions in September 2026. After the cutover, CI would emit warnings (then eventually fail) on every run. Updating to `actions/checkout@v6.0.2` and `actions/setup-go@v6.4.0` — both of which use Node.js 22 — removes this future breakage before it becomes urgent.
+
+## Observed
+- `.github/workflows/ci.yml` used `actions/checkout@v4` and `actions/setup-go@v5`, both built on Node.js 20.
+- GitHub has announced forced cutover to Node.js 20 deprecation for September 2026.
+- `actions/checkout` latest is `v6.0.2` (released 2026-01-09); `actions/setup-go` latest is `v6.4.0` (released 2026-03-30). Both use Node.js 22.
+- This was flagged as "Next" in Cycles 40, 41, and 42 — the last remaining known improvement before all work is feedback-driven.
+
+## Applied
+- Updated `actions/checkout@v4` → `actions/checkout@v6.0.2`
+- Updated `actions/setup-go@v5` → `actions/setup-go@v6.4.0`
+- **File:** `.github/workflows/ci.yml`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK
+go vet ./...     — OK
+```
+
+## Next
+- All known correctness, integration, CI infrastructure, and deprecation gaps are now addressed. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 42
 
 ## Who This Helps
