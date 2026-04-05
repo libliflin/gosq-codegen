@@ -1,9 +1,12 @@
 # Project Snapshot
-Generated: Sun Apr  5 13:46:44 EDT 2026
+Generated: Sun Apr  5 14:09:10 EDT 2026
 
 ## Git Status
 
 ## Recent Commits (last 10)
+aba3fa3 add MySQL support via -driver flag and Dialect abstraction (#18)
+5367cc8 add compilation test for DotImport=false (--dot-import=false flag path) (#17)
+536531d add unit tests for introspect error paths, bringing coverage to 100% (#16)
 78d3bf2 add integration test for non-ASCII table names through full pipeline (#15)
 65b4682 add unit tests for introspect.Tables using a mock SQL driver (#14)
 997fa2a add integration test for empty schema (view-only) pipeline (#13)
@@ -11,9 +14,6 @@ Generated: Sun Apr  5 13:46:44 EDT 2026
 4bd6dd3 new lathe version
 799b577 pin staticcheck to v0.5.1 in CI (#9)
 c4df5fb add integration tests for introspect.Tables against real Postgres in CI (#6)
-a30baac cache Go modules in CI (#5)
-509b162 add CI badge to README (#4)
-b77ecc0 document -schema flag: generated identifiers exclude schema name (#3)
 
 ## Go Module
 module github.com/libliflin/gosq-codegen
@@ -28,8 +28,8 @@ OK — builds clean
 ## Tests
 ```
 ?   	github.com/libliflin/gosq-codegen	[no test files]
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.349s
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.174s
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.422s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.172s
 ```
 
 ## Vet
@@ -56,16 +56,16 @@ github.com/libliflin/gosq-codegen/internal/introspect
 ## Coverage
 ```
 	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.353s	coverage: 98.6% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.176s	coverage: 87.0% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.241s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.308s	coverage: 96.2% of statements
 ```
 
 ## CI/CD Status
-Current branch: lathe/20260405-134644 (no PR created yet)
+Current branch: lathe/add-support-for-more-databases-20260405-140910 (no PR created yet)
 
 ### All Open PRs (by current user)
 ```
-#15 [lathe/20260405-134339] state:MERGED checks:pass
+
 ```
 
 ### CI Configuration
@@ -74,10 +74,10 @@ Workflows found:
 
 ### Recent Workflow Runs
 ```
-#24007004763 in_progress/ event:push branch:main at:2026-04-05T17:46:39
-#24006990958 completed/success event:pull_request branch:lathe/20260405-134339 at:2026-04-05T17:45:52
-#24006990421 completed/success event:push branch:lathe/20260405-134339 at:2026-04-05T17:45:49
-#24006986875 completed/success event:pull_request branch:lathe/20260405-134339 at:2026-04-05T17:45:36
-#24006983264 completed/success event:push branch:lathe/20260405-134339 at:2026-04-05T17:45:25
+#24007394275 in_progress/ event:push branch:main at:2026-04-05T18:09:06
+#24007371078 completed/success event:pull_request branch:lathe/add-support-for-more-databases-20260405-140315 at:2026-04-05T18:07:43
+#24007370363 completed/success event:push branch:lathe/add-support-for-more-databases-20260405-140315 at:2026-04-05T18:07:41
+#24007367270 completed/success event:pull_request branch:lathe/add-support-for-more-databases-20260405-140315 at:2026-04-05T18:07:29
+#24007364628 completed/success event:push branch:lathe/add-support-for-more-databases-20260405-140315 at:2026-04-05T18:07:19
 ```
 
