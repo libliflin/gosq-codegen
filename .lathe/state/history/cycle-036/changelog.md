@@ -2,37 +2,6 @@
 
 ---
 
-# Changelog — Cycle 39
-
-## Who This Helps
-- **Stakeholder:** gosq users and contributors
-- **Impact:** The core promise — "generate correct, compilable Go from any schema" — is now verified automatically on every `go test ./...`. Before this cycle, no test ever compiled the generated output; tests only checked that the byte string was correct. A contributor who accidentally introduces a syntax error into `Generate` (e.g. an unbalanced paren, an invalid identifier) now gets a failing test immediately rather than discovering the breakage at user runtime.
-
-## Observed
-- All existing codegen tests construct `[]introspect.Table` inline and assert the exact `string(got)`. They verify that the bytes are right, but none of them actually compile the output.
-- `go/format` catches syntax errors early (and the `format.Source` error path is unreachable from valid input), but it does not verify that the generated declarations are semantically valid Go — e.g. that all referenced identifiers exist, imports resolve, variable types are consistent.
-- The Lathe notes identified "end-to-end pipeline test: codegen → compile" as the natural follow-on after cycle 38's integration test.
-
-## Applied
-- Added `TestGenerateCompiles` to `internal/codegen/codegen_test.go`.
-- The test generates Go source for a two-table schema (users + orders, with `api_key` to exercise an initialism), writes it to a `t.TempDir()` module, and runs `go build ./schema`.
-- To avoid network access, the test creates a minimal `gosqstub` local module that satisfies the `github.com/libliflin/gosq` import with stub `NewTable`/`NewField` functions. A `replace` directive in `go.mod` points at the stub — no proxy, no checksum.
-- Added `os`, `os/exec`, `path/filepath` to imports.
-- **File:** `internal/codegen/codegen_test.go`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK (TestGenerateCompiles passes in ~40ms)
-go vet ./...     — OK
-```
-
-## Next
-- The integration test (`TestTablesEcommerce`) could be extended to also call `codegen.Generate` and compile the result — verifying the full DDL → introspect → codegen → compile pipeline end-to-end. That would require a similar gosq stub or network access in CI.
-- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026.
-
----
-
 # Changelog — Cycle 38
 
 ## Who This Helps

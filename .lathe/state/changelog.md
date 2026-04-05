@@ -2,6 +2,186 @@
 
 ---
 
+# Changelog — Cycle 44
+
+## Who This Helps
+- **Stakeholder:** the lathe engine and contributors
+- **Impact:** PR #9 was showing as CONFLICTING on GitHub because main progressed (PR #6 merged integration tests) while our branch was still based on the old `lathe/20260405-084607` base. Rebasing onto the current main restores mergeability so the engine can auto-merge when CI passes.
+
+## Observed
+- Both PR #7 and PR #9 showed `"mergeStateStatus":"DIRTY","mergeable":"CONFLICTING"` in the snapshot.
+- `origin/main` had advanced to `c4df5fb` ("add integration tests for introspect.Tables against real Postgres in CI (#6)") while our branch was still based on `lathe/20260405-084607`.
+- A local `git rebase origin/main` test succeeded cleanly — the original integration test commit was dropped as already upstream, and all subsequent commits applied without conflict.
+
+## Applied
+- Rebased `lathe/20260405-100731` onto `origin/main` with `git rebase origin/main`.
+- Two already-upstream commits were automatically dropped (the original integration test commit and its cleanup commit).
+- Force-pushed to `origin/lathe/20260405-100731` to update the PR base.
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK
+go vet ./...     — OK
+```
+
+## Next
+- PR #9 should now be mergeable. Once CI passes and the engine merges it, all the accumulated integration work (staticcheck pin, non-ASCII test, schema isolation test, Node.js 22 Actions) will be in main.
+- After that merge, all known gaps are closed. Further improvements should be driven by real user feedback.
+
+---
+
+# Changelog — Cycle 43
+
+## Who This Helps
+- **Stakeholder:** contributors and maintainers
+- **Impact:** The CI workflow no longer uses Node.js 20, which GitHub has announced will be deprecated for Actions in September 2026. After the cutover, CI would emit warnings (then eventually fail) on every run. Updating to `actions/checkout@v6.0.2` and `actions/setup-go@v6.4.0` — both of which use Node.js 22 — removes this future breakage before it becomes urgent.
+
+## Observed
+- `.github/workflows/ci.yml` used `actions/checkout@v4` and `actions/setup-go@v5`, both built on Node.js 20.
+- GitHub has announced forced cutover to Node.js 20 deprecation for September 2026.
+- `actions/checkout` latest is `v6.0.2` (released 2026-01-09); `actions/setup-go` latest is `v6.4.0` (released 2026-03-30). Both use Node.js 22.
+- This was flagged as "Next" in Cycles 40, 41, and 42 — the last remaining known improvement before all work is feedback-driven.
+
+## Applied
+- Updated `actions/checkout@v4` → `actions/checkout@v6.0.2`
+- Updated `actions/setup-go@v5` → `actions/setup-go@v6.4.0`
+- **File:** `.github/workflows/ci.yml`
+
+## Validated
+```
+go build ./...   — OK
+go test ./...    — OK
+go vet ./...     — OK
+```
+
+## Next
+- All known correctness, integration, CI infrastructure, and deprecation gaps are now addressed. Further improvements should be driven by real user feedback.
+
+---
+
+# Changelog — Cycle 42
+
+## Who This Helps
+- **Stakeholder:** gosq users with multi-schema PostgreSQL setups
+- **Impact:** The introspect query's `WHERE c.table_schema = $1` clause has never been tested in a live environment where multiple schemas exist simultaneously. `TestTablesSchemaIsolation` now verifies that `Tables("reporting")` returns only reporting tables, not tables from a coexisting `public`-equivalent schema — and vice versa. A future regression in the schema filter would be caught immediately in CI.
+
+## Observed
+- Cycle 35 documented in the README that users with multiple schemas must use distinct `-pkg` and `-out` values — that documentation was backed by code inspection, not a test.
+- `TestTablesEcommerce` and `TestTablesNonASCII` each create a single schema and verify columns within it. Neither test verifies that tables from a different schema are excluded from results.
+- The `WHERE c.table_schema = $1` filter in `introspect.Tables` (line 35 of `introspect.go`) is the entire schema isolation mechanism. It was untested in a multi-schema environment.
+
+## Applied
+- Created `testdata/schemas/reporting.sql`: DDL for a `reports` table (id, title, created_at — all NOT NULL). Minimal fixture, distinct from the ecommerce fixture.
+- Added `TestTablesSchemaIsolation` to `internal/introspect/integration_test.go` (`//go:build integration`): creates two schemas (`gosq_isol_a` with ecommerce DDL, `gosq_isol_b` with reporting DDL), calls `Tables` with each schema name, and asserts that each call returns only the tables from the specified schema.
+- **Files:** `testdata/schemas/reporting.sql`, `internal/introspect/integration_test.go`
+
+## Validated
+```
+go build ./...                   — OK
+go test ./...                    — OK (unit tests pass, no DB required)
+go vet ./...                     — OK
+go build -tags integration ./... — OK (integration test file compiles)
+```
+
+## Next
+- Update `actions/checkout@v4` and `actions/setup-go@v5` to versions using Node.js 22 before GitHub's September 2026 deprecation cutover. Check the latest action version tags before making this change.
+- All known correctness and integration gaps are now covered.
+
+---
+
+# Changelog — Cycle 41
+
+## Who This Helps
+- **Stakeholder:** gosq users with non-ASCII column names (accented characters, non-Latin scripts)
+- **Impact:** The rune-slicing fix (cycle 24) that made `éditeur` → `Éclat` work correctly had never been tested against a real Postgres database. `TestTablesNonASCII` now validates the full path: Postgres stores the column name as UTF-8 → `introspect.Tables` returns it correctly → `codegen.Generate` produces `ArticlesÉditeur` (not garbled bytes). If a future change accidentally reverts to byte-slicing, CI will catch it with a real DB.
+
+## Observed
+- `TestGenerateProductionScale` and `TestToExported` (with `{"éclat", "Éclat"}`) verified codegen in isolation with inline `[]introspect.Table`.
+- No integration test verified that Postgres actually returns column names with multi-byte UTF-8 characters intact, or that the pipeline handles them end-to-end.
+- The non-ASCII handling was the only cycle-24 correctness fix without a corresponding integration-tier test.
+
+## Applied
+- Created `testdata/schemas/non_ascii.sql`: DDL for an `articles` table with columns `éditeur` (NOT NULL, starts with 2-byte UTF-8 `é`), `prénom` (nullable, accent in middle), and `titre` (NOT NULL, ASCII).
+- Added `TestTablesNonASCII` to `internal/introspect/integration_test.go` (`//go:build integration`): loads the fixture, asserts column names and nullability from `Tables`, then calls `codegen.Generate` and asserts the output contains `ArticlesÉditeur` and `ArticlesPrénom`.
+- Added `"strings"` import (for `strings.Contains`).
+- **Files:** `testdata/schemas/non_ascii.sql`, `internal/introspect/integration_test.go`
+
+## Validated
+```
+go build ./...                    — OK
+go test ./...                     — OK (unit tests pass, no DB required)
+go vet ./...                      — OK
+go build -tags integration ./...  — OK (integration test file compiles)
+```
+
+## Next
+- Update `actions/checkout@v4` and `actions/setup-go@v5` to versions using Node.js 22 before GitHub's September 2026 deprecation cutover.
+- All known correctness and integration gaps are covered. Further improvements should be driven by real user feedback.
+
+---
+
+# Changelog — Cycle 40
+
+## Who This Helps
+- **Stakeholder:** contributors and CI
+- **Impact:** CI was failing on every push with `import cycle not allowed in test`. The integration test (`TestTablesEcommerce`, `TestPipelineEcommerce`) added in cycle 38/39 was declared as `package introspect` and imported `internal/codegen`, which itself imports `internal/introspect` — a cycle. No test was running. This fix restores CI to passing.
+
+## Observed
+- CI run #24002047580 failed with: `imports github.com/libliflin/gosq-codegen/internal/introspect: import cycle not allowed in test`
+- The integration test file used `package introspect` (internal package), not `package introspect_test` (external test package)
+- Because `codegen` imports `introspect`, adding a `codegen` import inside the `introspect` package created the cycle
+
+## Applied
+- Changed `package introspect` → `package introspect_test` in `internal/introspect/integration_test.go`
+- Added explicit `introspect` import so the tests can call `introspect.Tables(...)`
+- **File:** `internal/introspect/integration_test.go`
+- **PR:** https://github.com/libliflin/gosq-codegen/pull/8
+
+## Validated
+```
+go build -tags integration ./...   — OK
+go test ./...                      — OK
+go vet ./...                       — OK
+```
+
+## Next
+- CI should now pass with the integration tests running against the Postgres service. Once PR #8 merges, the full integration test suite is active.
+- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026.
+
+---
+
+# Changelog — Cycle 39
+
+## Who This Helps
+- **Stakeholder:** gosq users and contributors
+- **Impact:** The tool's full pipeline — DDL → `introspect.Tables` (real Postgres) → `codegen.Generate` → `go build` — is now verified automatically in CI on every push and PR. Previously, `TestTablesEcommerce` verified introspect returns correct data, and `TestGenerateCompiles` (unit test) verified codegen output compiles from inline data. Neither test exercised the complete path from a real database all the way to compilable Go. `TestPipelineEcommerce` closes this gap.
+
+## Observed
+- `TestTablesEcommerce` verifies `introspect.Tables` returns correct tables/columns from real Postgres. It does not pipe the result through `codegen.Generate`.
+- `TestGenerateCompiles` verifies `codegen.Generate` output compiles, but uses inline `[]introspect.Table` — no real database involved.
+- The claim "point it at your database and get compilable Go" had never been verified by a single automated test that did both.
+
+## Applied
+- Added `TestPipelineEcommerce` to `internal/introspect/integration_test.go` (`//go:build integration`).
+- The test: creates a temporary Postgres schema → loads `testdata/schemas/ecommerce.sql` → calls `Tables` → calls `codegen.Generate` → writes to a temp module with a gosq stub → runs `go build ./schema`.
+- Added `"os/exec"`, `"path/filepath"`, and `"github.com/libliflin/gosq-codegen/internal/codegen"` to the integration test imports.
+- **File:** `internal/introspect/integration_test.go`
+
+## Validated
+```
+go build ./...               — OK
+go test ./...                — OK (unit tests pass, no DB required)
+go vet ./...                 — OK
+go build -tags integration ./... — OK (integration test file compiles)
+```
+
+## Next
+- The full pipeline is now verified end-to-end in CI. All core correctness and infrastructure work is done.
+- Remaining incremental improvements: pin staticcheck version (CI speed, ~20–30s savings), update Actions versions before Node.js 20 deprecation in September 2026.
+
+---
+
 # Changelog — Cycle 38
 
 ## Who This Helps
