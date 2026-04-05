@@ -6,66 +6,52 @@ Read this before starting cycles. It summarizes the judgment calls baked into th
 
 ## Who this serves
 
-**gosq users** — Go developers who've adopted the gosq query builder and want their schema auto-generated. The tool works end-to-end: `go install`, run the CLI against their database, get a `schema.go` file. The correctness work is done — all known edge cases are handled and tested. CI is in place and the badge is visible in the README.
+**gosq users** — Go developers who've adopted the gosq query builder and want their schema auto-generated. The tool is production-ready: `go install`, run the CLI against their database, get a `schema.go` file. Correctness, integration tests, and CI are all in place. The CI badge is green and visible in the README.
 
-**Contributors** — developers working on gosq-codegen itself (currently the author). The codebase is clean, well-structured, and well-tested. CI runs automatically on every push and PR: go build, go vet, go test, staticcheck. Contributors get automated feedback within ~1–2 minutes.
+**Contributors** — developers working on gosq-codegen itself (currently the author). The codebase is clean, well-structured, and fully tested at both the unit and integration tiers. CI runs automatically on every push and PR: go build, go vet, go test, go test -tags integration (against real Postgres), staticcheck.
 
-**The gosq project** — gosq-codegen validates gosq's `NewTable`/`NewField` API by using it from the outside. A robust generator is a vote of confidence in the library design.
+**The gosq project** — gosq-codegen validates gosq's `NewTable`/`NewField` API from the outside. A robust generator is a vote of confidence in the library design. This stakeholder benefits silently.
 
 ---
 
 ## Key tensions and how they were resolved
 
-**Stability vs. improving identifiers.** Identifier changes in generated output rename variables across users' codebases. The naming conventions are correct and comprehensive (17 initialisms, 43 test cases). The agent should favor stability — only change naming logic for a clear bug (produces non-compilable or semantically wrong output), and document it as a renaming change.
+**Stability vs. improving identifiers.** Generated identifiers live in users' codebases. The naming conventions are correct and comprehensive (17 initialisms, 43 subtests). The agent favors stability — only change naming logic for a clear bug (produces non-compilable or semantically wrong output), and document it as a renaming change.
 
-**Edge-case completeness vs. simplicity.** The current CLI flag surface (`-dsn`, `-out`, `-pkg`, `-schema`, `-dot-import`, `-version`) is the right size. New flags should only appear when a real user can't accomplish something they need — not for hypothetical requirements.
+**Edge-case completeness vs. simplicity.** The current flag surface (`-dsn`, `-out`, `-pkg`, `-schema`, `-dot-import`, `-version`) is the right size. New flags only appear when a real user can't accomplish something they need.
 
-**Fast local tests vs. real database confidence.** Two tiers: unit tests (`go test ./...`) run fast with no database — always. Integration tests (`//go:build integration`) run against real Postgres in CI via `services: postgres:`, with DDL fixtures in `testdata/schemas/`. The integration tier is the next major piece of work — `introspect.Tables` has 0% automated coverage and the full pipeline has never been tested against a real database automatically.
+**Fast local tests vs. real database confidence.** Two tiers are in place and working: unit tests (no DB, fast) and integration tests (`//go:build integration`, real Postgres, runs in CI). The integration tier now covers the full pipeline: introspect, non-ASCII columns, schema isolation, end-to-end DDL → codegen → compile. The remaining gap is coverage depth (small DDL fixtures, no view-exclusion test).
 
-**CI speed vs. CI coverage.** Current CI is ~60–90 seconds. The staticcheck installation step adds ~20–30 seconds and is not cached. Switching to a cached or version-pinned staticcheck would improve contributor feedback time without sacrificing any coverage. This tension should be resolved in favor of speed without sacrificing the staticcheck step.
+**CI speed vs. CI coverage.** Current CI takes ~60–90 seconds. Staticcheck installation (`go install @v0.5.1`) is not cached, adding ~20–30 seconds. Switching to a cached install would improve contributor feedback time without sacrificing coverage.
 
 ---
 
-## Current focus (after ~37 cycles)
+## Current focus (after 43 cycles)
 
-The project has been through ~37 cycles. All correctness and core infrastructure work is complete:
+The project is battle-tested. All prior priorities — correctness, collision detection, non-ASCII handling, integration tests, CI infrastructure, Node.js 22 actions — are complete. The CI badge is green.
 
-- Non-ASCII column names: fixed (rune-slicing in `toExported`)
-- Blank identifier table names: error-on-generate
-- Misleading introspect test stub: removed
-- Cross-table field identifier collision: detected
-- Table-field identifier collision: detected
-- Production-scale test (17 tables, 108 columns): added
-- Blank column identifier (`_`): documented and tested
-- Multi-underscore column collision: tested
-- Field-vs-prior-table collision: tested; coverage 98.6%
-- Consecutive initialisations + numeric version segments in `TestToExported`: 43 subtests
-- `staticcheck` confirmed clean
-- **CI added**: GitHub Actions with go build, go vet, go test, staticcheck (cycles 33–34)
-- **Module caching added** to CI (`cache: true` on setup-go)
-- **README CI badge** added (cycle 36)
-- **`-schema` flag behavior** documented in README (cycle 35)
+**Remaining gaps, roughly in priority order:**
 
-**The agent's next priority is integration testing against a real Postgres database in CI.** The tool's full pipeline — DDL → introspect → codegen → compilable Go — has never been tested automatically against a real database. This is the biggest remaining confidence gap.
+1. **No integration test for view exclusion.** The introspect query filters `table_type = 'BASE TABLE'`, but no test has ever verified this against a schema that actually contains views. A DDL fixture with a view alongside tables, plus an assertion that the view is absent from `Tables()` output, would close this.
 
-The work:
-1. Add `testdata/schemas/*.sql` DDL fixtures (e-commerce, non-ASCII columns, PostGIS types, multi-schema)
-2. Add `//go:build integration` tests that load fixtures into real Postgres, run introspect, pipe through codegen, verify output compiles
-3. Add `services: postgres:` to `.github/workflows/ci.yml`
-4. Keep `go test ./...` fast and DB-free for local development
+2. **Small integration DDL fixtures.** The ecommerce fixture (2 tables, 8 columns) is minimal. The full pipeline test (`TestPipelineEcommerce`) exercises the same tiny schema. A larger DDL fixture (10–15 tables with diverse column naming patterns) would give meaningfully more confidence in the integration path.
 
-After integration tests are in place, remaining work is incremental: pin staticcheck, update Actions versions, add GoDoc examples.
+3. **Empty `introspect_test.go`.** The file contains only `package introspect`. It's a vestigial placeholder. Options: delete it (one-line cleanup) or fill it with unit tests for `introspect` behaviors that don't require a real database (currently: none — `Tables` requires a DB, and `Table`/`Column` are pure data types). Deleting is lower-value than adding a real integration test elsewhere.
+
+4. **No GoDoc `Example` functions.** Neither package has `Example` functions. A runnable example in `codegen_test.go` (package `codegen_test`) showing `Generate` in action would double as documentation and test.
+
+5. **Staticcheck install is not cached.** Known issue, low priority since CI passes. Caching staticcheck would shave ~20–30 seconds off every CI run.
 
 ---
 
 ## What could be wrong
 
-**staticcheck installation is slow and unpinned.** The current approach works but is suboptimal. Pinning to a version or caching the binary would both improve CI and make the staticcheck version explicit in the repo's history.
+**The integration fixtures are small.** I assessed the project as "battle-tested" based on the completeness of the test strategy — unit, integration, and pipeline tests all exist. But the integration path has only been exercised against 2-table schemas. A future regression in the introspect query that only manifests with more complex schemas (many tables, deep column counts) might not be caught.
 
-**Branch protection unknown.** Whether the default branch requires PR reviews before merge can't be verified without GitHub API access. If the repo is unprotected and autonomous cycles are running, changes could land on main without review. Enable branch protection (require PR review) before running many cycles autonomously.
+**Branch protection unknown.** Whether the default branch requires PR reviews before merge can't be verified from files alone. If unprotected, autonomous cycles could push directly to main. Enable branch protection (require PR review) before running many cycles autonomously.
 
-**The `format.Source` error path** (1.4% uncovered) is unreachable from any valid input. Not a gap.
+**The `format.Source` error path (1.4% uncovered)** is unreachable from valid input — documented as such. Not a gap.
 
-**No end-to-end pipeline test against a real database.** The tool has never been automatically tested against a real Postgres instance. `introspect.Tables` has 0% automated coverage. The full pipeline (DDL → introspect → codegen → compile) is verified only by hand. Integration tests in CI with `services: postgres:` and DDL fixtures would close this gap completely.
+**No released version tags.** Users who `go install @latest` get whatever main is. The `-version` flag will print `(devel)` for local builds but correct version info for tagged installs. This isn't a bug, but it limits version pinning.
 
-**No released version tags.** Users who `go install @latest` get whatever main is. There are no semver tags, so the `-version` flag prints module version from build info only for installs after tagging. This isn't a bug, but it limits users' ability to pin to a specific version.
+**View exclusion is assumed, not verified.** The `WHERE t.table_type = 'BASE TABLE'` clause in `introspect.Tables` looks correct, but it has never been tested against a real schema with views. If the clause were accidentally dropped or changed, no test would catch it.

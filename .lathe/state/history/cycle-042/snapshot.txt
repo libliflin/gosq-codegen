@@ -1,0 +1,95 @@
+# Project Snapshot
+Generated: Sun Apr  5 10:25:48 EDT 2026
+
+## Git Status
+ M .lathe/state/cycle.json
+?? .lathe/state/history/cycle-041/
+
+## Recent Commits (last 10)
+94d1d1f lathe: cycle cleanup (agent left uncommitted changes)
+4883a6d update actions/checkout to v6.0.2 and actions/setup-go to v6.4.0 (Node.js 22)
+fa73a09 lathe: cycle cleanup (agent left uncommitted changes)
+7eb100f add TestTablesSchemaIsolation: verify introspect schema filter isolates multi-schema results
+42e992f lathe: cycle cleanup (agent left uncommitted changes)
+7e6308f add non-ASCII integration test: verify éditeur → ArticlesÉditeur end-to-end
+2aa3572 lathe: cycle cleanup (agent left uncommitted changes)
+ca25f90 pin staticcheck to v0.5.1 in CI for deterministic builds
+f661b13 lathe: cycle cleanup (agent left uncommitted changes)
+726476b fix import cycle in integration test: use package introspect_test
+
+## Go Module
+module github.com/libliflin/gosq-codegen
+
+go 1.22
+
+## Build
+```
+OK — builds clean
+```
+
+## Tests
+```
+?   	github.com/libliflin/gosq-codegen	[no test files]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.209s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.299s [no tests to run]
+```
+
+## Vet
+```
+OK — vet clean
+```
+
+## Packages
+github.com/libliflin/gosq-codegen
+github.com/libliflin/gosq-codegen/internal/codegen
+github.com/libliflin/gosq-codegen/internal/introspect
+
+## Go Files
+./internal/codegen/codegen_test.go
+./internal/codegen/codegen.go
+./internal/introspect/integration_test.go
+./internal/introspect/introspect_test.go
+./internal/introspect/introspect.go
+./main.go
+
+## TODOs
+(none)
+
+## Coverage
+```
+	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.363s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.175s	coverage: 0.0% of statements [no tests to run]
+```
+
+## CI/CD Status
+
+### Primary PR: #9 (branch: lathe/20260405-100731)
+```
+test: pass
+```
+
+### PR State
+```
+{"mergeStateStatus":"DIRTY","mergeable":"CONFLICTING","number":9,"state":"OPEN"}
+```
+
+### All Open PRs (by current user)
+```
+#9 [lathe/20260405-100731] state:OPEN checks:pass
+#7 [lathe/20260405-084607] state:OPEN checks:pass
+```
+
+### CI Configuration
+Workflows found:
+.github/workflows/ci.yml
+
+### Recent Workflow Runs
+```
+#24003479352 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:24:39
+#24003478041 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:24:34
+#24003445748 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:22:41
+#24003443638 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:22:34
+#24003374336 completed/success event:push branch:lathe/20260405-100731 at:2026-04-05T14:18:33
+```
+
