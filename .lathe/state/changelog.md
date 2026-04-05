@@ -2,6 +2,36 @@
 
 ---
 
+# Changelog — Cycle 45
+
+## Who This Helps
+- **Stakeholder:** gosq users with views in their PostgreSQL schema
+- **Impact:** The `WHERE t.table_type = 'BASE TABLE'` filter in `introspect.Tables` was the only mechanism preventing views from appearing in generated output. It was correct but had never been tested against a schema that actually contains a view. `TestTablesViewExclusion` now verifies this filter works: creates a schema with one base table (`products`) and one view (`active_products`), calls `Tables`, and asserts only the base table is returned. A future regression that accidentally removes the view filter would be caught immediately in CI.
+
+## Observed
+- Every changelog since cycle 10 (when view filtering was added) noted this gap: "No integration test confirms that views are excluded."
+- The `WHERE t.table_type = 'BASE TABLE'` clause is correct — but "correct" and "tested" are different things.
+- All four existing integration tests (ecommerce, non-ASCII, schema isolation, pipeline) use DDL fixtures with only base tables. None creates a view.
+- A gosq user with views in their schema relies entirely on this untested filter.
+
+## Applied
+- Created `testdata/schemas/views.sql`: DDL with one base table (`products`, 4 columns) and one view (`active_products` derived from `products`).
+- Added `TestTablesViewExclusion` to `internal/introspect/integration_test.go` (`//go:build integration`): loads the fixture, calls `Tables`, asserts exactly 1 table returned and its name is `products` (not `active_products`).
+- **Files:** `testdata/schemas/views.sql`, `internal/introspect/integration_test.go`
+
+## Validated
+```
+go build ./...                   — OK
+go test ./...                    — OK (unit tests pass, no DB required)
+go vet ./...                     — OK
+go build -tags integration ./... — OK (integration test file compiles)
+```
+
+## Next
+- All known gaps are now closed: view exclusion is tested, schema isolation is tested, non-ASCII columns are tested, the full pipeline is tested. The `introspect_test.go` placeholder (`package introspect` with no tests) remains but is harmless. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 44
 
 ## Who This Helps

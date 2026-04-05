@@ -333,6 +333,64 @@ func TestTablesSchemaIsolation(t *testing.T) {
 	}
 }
 
+// TestTablesViewExclusion verifies that Tables excludes views from its results.
+// The introspect query filters to table_type = 'BASE TABLE'; this test confirms
+// that filter works against a schema that actually contains a view. A gosq user
+// with views in their schema must not see spurious NewTable/NewField declarations
+// for those views in the generated output.
+func TestTablesViewExclusion(t *testing.T) {
+	db := openIntegrationDB(t)
+	ctx := context.Background()
+
+	const schema = "gosq_views_test"
+
+	if _, err := db.ExecContext(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE"); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	})
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+		t.Fatalf("set search_path: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/views.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	tables, err := introspect.Tables(ctx, db, schema)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+
+	// The fixture has one base table (products) and one view (active_products).
+	// Tables must return only the base table.
+	if len(tables) != 1 {
+		names := make([]string, len(tables))
+		for i, tbl := range tables {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("expected 1 table (base tables only), got %d: %v", len(tables), names)
+	}
+	if tables[0].Name != "products" {
+		t.Errorf("tables[0].Name = %q, want %q", tables[0].Name, "products")
+	}
+}
+
 // TestPipelineEcommerce runs the full pipeline end-to-end:
 // DDL fixture → introspect.Tables (real Postgres) → codegen.Generate → go build.
 // This verifies that the tool's core promise holds: point it at a database,
