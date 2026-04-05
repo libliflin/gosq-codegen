@@ -1,22 +1,23 @@
 # Project Snapshot
-Generated: Sat Apr  4 20:19:40 EDT 2026
+Generated: Sat Apr  4 20:32:29 EDT 2026
 
 ## Git Status
  M .lathe/state/cycle.json
+ M .lathe/state/lathe.pid
  M .lathe/state/session.json
-?? .lathe/state/history/cycle-033/
+?? .lathe/state/history/cycle-034/
 
 ## Recent Commits (last 10)
-e960795 lathe: cycle cleanup (agent left uncommitted changes)
-f02c638 add staticcheck to CI workflow
-52746a4 lathe: cycle cleanup (agent left uncommitted changes)
-ed7184d add GitHub Actions CI workflow
+c5e85d6 document -schema flag: generated identifiers exclude schema name
+d9a20fb add staticcheck to CI workflow (#2)
+9538773 add GitHub Actions CI workflow (#1)
 278ec76 lathe upgrade
 efba165 32
 749e448 lathe: cycle 32
 0745a97 lathe: cycle 31
 d161b3d lathe: cycle 30
 45d8862 lathe: cycle 29
+2e994da lathe: cycle 28
 
 ## Go Module
 module github.com/libliflin/gosq-codegen
@@ -31,8 +32,8 @@ OK — builds clean
 ## Tests
 ```
 ?   	github.com/libliflin/gosq-codegen	[no test files]
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.185s
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.302s [no tests to run]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.324s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.187s [no tests to run]
 ```
 
 ## Vet
@@ -58,25 +59,16 @@ github.com/libliflin/gosq-codegen/internal/introspect
 ## Coverage
 ```
 	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.180s	coverage: 98.6% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.303s	coverage: 0.0% of statements [no tests to run]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.182s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.301s	coverage: 0.0% of statements [no tests to run]
 ```
 
 ## CI/CD Status
-
-### Primary PR: #2 (branch: lathe/20260404-201653)
-```
-test: pass
-```
-
-### PR State
-```
-{"mergeStateStatus":"DIRTY","mergeable":"CONFLICTING","number":2,"state":"OPEN"}
-```
+Current branch: lathe/20260404-203229 (no PR created yet)
 
 ### All Open PRs (by current user)
 ```
-#2 [lathe/20260404-201653] state:OPEN checks:pass
+#3 [lathe/20260404-202308] state:OPEN checks:pass
 ```
 
 ### CI Configuration
@@ -85,10 +77,10 @@ Workflows found:
 
 ### Recent Workflow Runs
 ```
-#23990605335 completed/success event:push branch:lathe/20260404-201653 at:2026-04-05T00:19:37
-#23990594119 completed/success event:push branch:lathe/20260404-201653 at:2026-04-05T00:18:50
-#23990574964 completed/success event:push branch:main at:2026-04-05T00:17:30
-#23990460213 completed/success event:pull_request branch:lathe/20260404-200821 at:2026-04-05T00:09:35
-#23990459105 completed/success event:push branch:lathe/20260404-200821 at:2026-04-05T00:09:31
+#23990682220 completed/success event:pull_request branch:lathe/20260404-202308 at:2026-04-05T00:24:53
+#23990680916 completed/success event:push branch:lathe/20260404-202308 at:2026-04-05T00:24:48
+#23990663949 completed/success event:push branch:main at:2026-04-05T00:23:35
+#23990651531 completed/success event:pull_request branch:lathe/20260404-201653 at:2026-04-05T00:22:41
+#23990650957 completed/success event:push branch:lathe/20260404-201653 at:2026-04-05T00:22:38
 ```
 

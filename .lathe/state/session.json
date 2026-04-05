@@ -1,7 +1,7 @@
 {
   "mode": "branch",
-  "branch": "lathe/20260404-203229",
-  "base_branch": "lathe/20260404-202308",
+  "branch": "lathe/20260404-cycle37",
+  "base_branch": "main",
   "pr_number": "",
   "started_at": "2026-04-05T00:32:29.319997+00:00"
 }
