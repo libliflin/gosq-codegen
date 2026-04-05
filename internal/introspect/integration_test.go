@@ -15,8 +15,11 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
+	"github.com/libliflin/gosq-codegen/internal/codegen"
 	_ "github.com/lib/pq"
 )
 
@@ -153,5 +156,90 @@ func TestTablesEcommerce(t *testing.T) {
 		if col.OrdinalPos != i+1 {
 			t.Errorf("users.Columns[%d].OrdinalPos = %d, want %d", i, col.OrdinalPos, i+1)
 		}
+	}
+}
+
+// TestPipelineEcommerce runs the full pipeline end-to-end:
+// DDL fixture → introspect.Tables (real Postgres) → codegen.Generate → go build.
+// This verifies that the tool's core promise holds: point it at a database,
+// get compilable Go out the other end.
+func TestPipelineEcommerce(t *testing.T) {
+	db := openIntegrationDB(t)
+	ctx := context.Background()
+
+	const schema = "gosq_pipeline_test"
+
+	if _, err := db.ExecContext(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE"); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	})
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+		t.Fatalf("set search_path: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/ecommerce.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	tables, err := Tables(ctx, db, schema)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+	if len(tables) == 0 {
+		t.Fatal("Tables returned no tables")
+	}
+
+	src, err := codegen.Generate(tables, codegen.Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// Write the generated output into a temporary module with a minimal gosq
+	// stub and verify it compiles.
+	dir := t.TempDir()
+
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	write(filepath.Join(dir, "gosqstub", "go.mod"), "module github.com/libliflin/gosq\n\ngo 1.22\n")
+	write(filepath.Join(dir, "gosqstub", "gosq.go"), `package gosq
+
+type Table struct{}
+type Field struct{}
+
+func NewTable(name string) Table { return Table{} }
+func NewField(name string) Field { return Field{} }
+`)
+	write(filepath.Join(dir, "schema", "schema.go"), string(src))
+	write(filepath.Join(dir, "go.mod"),
+		"module testmod\n\ngo 1.22\n\nrequire github.com/libliflin/gosq v0.0.1\n\nreplace github.com/libliflin/gosq => ./gosqstub\n")
+
+	cmd := exec.Command("go", "build", "./schema")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s\n\ngenerated source:\n%s", out, src)
 	}
 }
