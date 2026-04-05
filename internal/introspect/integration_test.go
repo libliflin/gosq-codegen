@@ -487,6 +487,114 @@ func NewField(name string) Field { return Field{} }
 	}
 }
 
+// TestPipelineNonASCIITableName runs the full pipeline against a schema with
+// non-ASCII table names, including one that starts with a multi-byte UTF-8
+// character ('é'). This exercises the rune-aware code path in toExported for
+// table names — the same path tested at the unit level by TestToExported but
+// not yet exercised against real Postgres.
+func TestPipelineNonASCIITableName(t *testing.T) {
+	db := openIntegrationDB(t)
+	ctx := context.Background()
+
+	const schema = "gosq_nonascii_table_test"
+
+	if _, err := db.ExecContext(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE"); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	})
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+		t.Fatalf("set search_path: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/non_ascii_table.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	tables, err := introspect.Tables(ctx, db, schema)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+
+	// Both base tables must be returned; alphabetical order: données, étagères.
+	if len(tables) != 2 {
+		names := make([]string, len(tables))
+		for i, tbl := range tables {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("expected 2 tables, got %d: %v", len(tables), names)
+	}
+	if tables[0].Name != "données" {
+		t.Errorf("tables[0].Name = %q, want %q", tables[0].Name, "données")
+	}
+	if tables[1].Name != "étagères" {
+		t.Errorf("tables[1].Name = %q, want %q", tables[1].Name, "étagères")
+	}
+
+	// Run the full pipeline: introspect → codegen → compile.
+	src, err := codegen.Generate(tables, codegen.Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	generated := string(src)
+	// Table "étagères" starts with 'é' (2-byte UTF-8); must produce "Étagères".
+	if !strings.Contains(generated, "Étagères") {
+		t.Errorf("expected generated source to contain %q\ngot:\n%s", "Étagères", generated)
+	}
+	// Table "données" starts with ASCII 'd'; must produce "Données".
+	if !strings.Contains(generated, "Données") {
+		t.Errorf("expected generated source to contain %q\ngot:\n%s", "Données", generated)
+	}
+
+	// Compile the generated output.
+	dir := t.TempDir()
+
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	write(filepath.Join(dir, "gosqstub", "go.mod"), "module github.com/libliflin/gosq\n\ngo 1.22\n")
+	write(filepath.Join(dir, "gosqstub", "gosq.go"), `package gosq
+
+type Table struct{}
+type Field struct{}
+
+func NewTable(name string) Table { return Table{} }
+func NewField(name string) Field { return Field{} }
+`)
+	write(filepath.Join(dir, "schema", "schema.go"), string(src))
+	write(filepath.Join(dir, "go.mod"),
+		"module testmod\n\ngo 1.22\n\nrequire github.com/libliflin/gosq v0.0.1\n\nreplace github.com/libliflin/gosq => ./gosqstub\n")
+
+	cmd := exec.Command("go", "build", "./schema")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s\n\ngenerated source:\n%s", out, src)
+	}
+}
+
 // TestPipelineEmptySchema verifies the full pipeline when the target schema has
 // no base tables — only a view. This exercises the path a gosq user hits when:
 //   - they point the tool at a schema that contains only views
