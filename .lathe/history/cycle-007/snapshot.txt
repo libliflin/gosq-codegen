@@ -1,0 +1,84 @@
+# Project Snapshot
+Generated: Sun Apr  5 14:39:22 EDT 2026
+
+## Git Status
+
+## Recent Commits (last 10)
+e2bc77f add SQLite support via -driver sqlite and DialectSQLite (#20)
+77ecbac add MySQL integration test with CI service (#19)
+aba3fa3 add MySQL support via -driver flag and Dialect abstraction (#18)
+5367cc8 add compilation test for DotImport=false (--dot-import=false flag path) (#17)
+536531d add unit tests for introspect error paths, bringing coverage to 100% (#16)
+78d3bf2 add integration test for non-ASCII table names through full pipeline (#15)
+65b4682 add unit tests for introspect.Tables using a mock SQL driver (#14)
+997fa2a add integration test for empty schema (view-only) pipeline (#13)
+04fadb6 add integration test for realistic 17-table schema with views excluded (#12)
+4bd6dd3 new lathe version
+
+## Go Module
+module github.com/libliflin/gosq-codegen
+
+go 1.25.0
+
+## Build
+```
+OK — builds clean
+```
+
+## Tests
+```
+?   	github.com/libliflin/gosq-codegen	[no test files]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.253s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.348s
+```
+
+## Vet
+```
+OK — vet clean
+```
+
+## Packages
+github.com/libliflin/gosq-codegen
+github.com/libliflin/gosq-codegen/internal/codegen
+github.com/libliflin/gosq-codegen/internal/introspect
+
+## Go Files
+./internal/codegen/codegen_test.go
+./internal/codegen/codegen.go
+./internal/introspect/integration_test.go
+./internal/introspect/introspect_test.go
+./internal/introspect/introspect.go
+./internal/introspect/sqlite_test.go
+./main.go
+
+## TODOs
+(none)
+
+## Coverage
+```
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.243s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.338s	coverage: 83.6% of statements
+(no coverage data)
+```
+
+## CI/CD Status
+Current branch: lathe/add-support-for-more-databases-20260405-143922 (no PR created yet)
+
+### All Open PRs (by current user)
+```
+
+```
+
+### CI Configuration
+Workflows found:
+.github/workflows/ci.yml
+
+### Recent Workflow Runs
+```
+#24007915113 in_progress/ event:push branch:main at:2026-04-05T18:39:18
+#24007892352 completed/success event:pull_request branch:lathe/add-support-for-more-databases-20260405-141851 at:2026-04-05T18:37:56
+#24007891577 completed/success event:push branch:lathe/add-support-for-more-databases-20260405-141851 at:2026-04-05T18:37:53
+#24007887837 completed/success event:pull_request branch:lathe/add-support-for-more-databases-20260405-141851 at:2026-04-05T18:37:38
+#24007887543 completed/success event:push branch:lathe/add-support-for-more-databases-20260405-141851 at:2026-04-05T18:37:37
+```
+
