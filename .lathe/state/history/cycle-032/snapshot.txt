@@ -1,11 +1,15 @@
 # Project Snapshot
-Generated: Sat Apr  4 14:35:19 EDT 2026
+Generated: Sat Apr  4 20:08:21 EDT 2026
 
 ## Git Status
  M .lathe/state/cycle.json
-?? .lathe/state/history/cycle-031/
+ M .lathe/state/lathe.pid
+?? .lathe/state/session.json
 
 ## Recent Commits (last 10)
+278ec76 lathe upgrade
+efba165 32
+749e448 lathe: cycle 32
 0745a97 lathe: cycle 31
 d161b3d lathe: cycle 30
 45d8862 lathe: cycle 29
@@ -13,9 +17,6 @@ d161b3d lathe: cycle 30
 2eff3b2 lathe: cycle 28
 53b491d lathe: cycle 27
 6f4f8bd lathe: cycle 26
-99f5456 lathe: cycle 25
-0b59051 codegen: error on blank identifier table names
-69a020f lathe: cycle 24
 
 ## Go Module
 module github.com/libliflin/gosq-codegen
@@ -30,8 +31,8 @@ OK — builds clean
 ## Tests
 ```
 ?   	github.com/libliflin/gosq-codegen	[no test files]
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.304s
-ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.168s [no tests to run]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.219s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.327s [no tests to run]
 ```
 
 ## Vet
@@ -57,6 +58,23 @@ github.com/libliflin/gosq-codegen/internal/introspect
 ## Coverage
 ```
 	github.com/libliflin/gosq-codegen		coverage: 0.0% of statements
-ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.313s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.310s	coverage: 98.6% of statements
 ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.175s	coverage: 0.0% of statements [no tests to run]
 ```
+
+## CI/CD Status
+Current branch: lathe/20260404-200821 (no PR created yet)
+
+### All Open PRs (by current user)
+```
+
+```
+
+### CI Configuration
+**No CI/CD configuration found.** The project has no automated validation beyond local commands. Creating CI is likely the highest-value first step.
+
+### Recent Workflow Runs
+```
+
+```
+

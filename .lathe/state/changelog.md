@@ -2,6 +2,38 @@
 
 ---
 
+# Changelog — Cycle 34
+
+## Who This Helps
+- **Stakeholder:** contributors
+- **Impact:** Every CI run now also runs `staticcheck`, which catches a class of bugs and style issues beyond `go vet`. A contributor who submits a PR gets automated staticcheck feedback without installing it locally. The tool already passes clean — this adds enforcement, not remediation.
+
+## Observed
+- Cycle 33 added a minimal CI workflow: `go build`, `go vet`, `go test`. staticcheck was explicitly called out as the next incremental CI improvement.
+- staticcheck was already clean locally (verified) but not enforced automatically.
+- The project's "What Matters Now" section listed "staticcheck is clean but not in CI" as the next CI improvement.
+
+## Applied
+- Added two steps to `.github/workflows/ci.yml`:
+  1. `go install honnef.co/go/tools/cmd/staticcheck@latest` — installs the tool
+  2. `staticcheck ./...` — runs it against all packages
+- **File:** `.github/workflows/ci.yml`
+- **PR:** https://github.com/libliflin/gosq-codegen/pull/2
+
+## Validated
+```
+go build ./...   — OK
+go vet ./...     — OK
+go test ./...    — OK
+staticcheck ./... — OK (clean, verified via full path locally)
+```
+
+## Next
+- Wait for PR #2 CI to pass, then merge with `--squash`.
+- The `-schema` flag behavior is worth documenting: two schemas with identical table names produce identical generated identifiers. A user running `-schema reporting` alongside `-schema public` would get clashing output. Either document the limitation or add a warning when a non-default schema is used.
+
+---
+
 # Changelog — Cycle 33
 
 ## Who This Helps
