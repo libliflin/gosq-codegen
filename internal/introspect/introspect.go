@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // Dialect identifies the SQL dialect used for parameterized queries.
@@ -17,6 +18,10 @@ const (
 	DialectPostgres Dialect = "postgres"
 	// DialectMySQL uses ? positional placeholders (MySQL, MariaDB).
 	DialectMySQL Dialect = "mysql"
+	// DialectSQLite introspects via sqlite_master and PRAGMA table_info.
+	// The schema parameter is used as the Table.Schema field only; SQLite
+	// does not support named schemas in the PostgreSQL/MySQL sense.
+	DialectSQLite Dialect = "sqlite"
 )
 
 // Table represents a database table and its columns.
@@ -36,8 +41,13 @@ type Column struct {
 
 // Tables queries information_schema.columns and returns all base tables in the
 // given schema, sorted by table name with columns ordered by ordinal position.
-// d selects the SQL placeholder style: DialectPostgres uses $1, DialectMySQL uses ?.
+// d selects the SQL dialect: DialectPostgres uses $1 placeholders,
+// DialectMySQL uses ?, and DialectSQLite uses sqlite_master + PRAGMA table_info.
 func Tables(ctx context.Context, db *sql.DB, schema string, d Dialect) ([]Table, error) {
+	if d == DialectSQLite {
+		return tablesFromSQLite(ctx, db, schema)
+	}
+
 	placeholder := "$1"
 	if d == DialectMySQL {
 		placeholder = "?"
@@ -89,4 +99,79 @@ ORDER BY c.table_name, c.ordinal_position`
 		tables = append(tables, *tableMap[name])
 	}
 	return tables, nil
+}
+
+// tablesFromSQLite introspects an SQLite database using sqlite_master and
+// PRAGMA table_info. Views are excluded (sqlite_master type = 'view').
+// The schema parameter is stored in Table.Schema but does not filter results —
+// SQLite databases contain one schema (the attached database file).
+func tablesFromSQLite(ctx context.Context, db *sql.DB, schema string) ([]Table, error) {
+	rows, err := db.QueryContext(ctx, `
+SELECT name FROM sqlite_master
+WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("query sqlite_master: %w", err)
+	}
+
+	var tableNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan table name: %w", err)
+		}
+		tableNames = append(tableNames, name)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate table names: %w", err)
+	}
+	rows.Close()
+
+	tables := make([]Table, 0, len(tableNames))
+	for _, name := range tableNames {
+		cols, err := sqliteColumnsForTable(ctx, db, name)
+		if err != nil {
+			return nil, err
+		}
+		tables = append(tables, Table{Schema: schema, Name: name, Columns: cols})
+	}
+	return tables, nil
+}
+
+// sqliteColumnsForTable returns columns for one SQLite table via PRAGMA table_info.
+// Results are ordered by cid (column definition order). The table name is
+// double-quoted to handle names with special characters.
+func sqliteColumnsForTable(ctx context.Context, db *sql.DB, table string) ([]Column, error) {
+	// Double-quote the table name; escape embedded double quotes by doubling.
+	quoted := `"` + strings.ReplaceAll(table, `"`, `""`) + `"`
+	rows, err := db.QueryContext(ctx, "PRAGMA table_info("+quoted+")")
+	if err != nil {
+		return nil, fmt.Errorf("pragma table_info(%s): %w", table, err)
+	}
+	defer rows.Close()
+
+	var cols []Column
+	for rows.Next() {
+		var cid, notNull, pk int
+		var colName, dataType string
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &colName, &dataType, &notNull, &dfltValue, &pk); err != nil {
+			return nil, fmt.Errorf("scan column for table %s: %w", table, err)
+		}
+		if dataType == "" {
+			dataType = "text"
+		}
+		cols = append(cols, Column{
+			Name:       colName,
+			DataType:   dataType,
+			IsNullable: notNull == 0,
+			OrdinalPos: cid + 1,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate columns for %s: %w", table, err)
+	}
+	return cols, nil
 }
