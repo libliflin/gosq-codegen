@@ -1,71 +1,40 @@
 # Alignment Summary
 
-Read this before starting cycles. It summarizes the judgment calls baked into the agent so you can gut-check them before running.
+**For the project owner to review before starting cycles.**
 
 ---
 
 ## Who this serves
 
-**gosq users** — Go developers who've adopted the gosq query builder and want their schema auto-generated. The tool works end-to-end: `go install`, run the CLI against their database, get a `schema.go` file. The correctness work is done — all known edge cases are handled and tested. CI is in place and the badge is visible in the README.
-
-**Contributors** — developers working on gosq-codegen itself (currently the author). The codebase is clean, well-structured, and well-tested. CI runs automatically on every push and PR: go build, go vet, go test, staticcheck. Contributors get automated feedback within ~1–2 minutes.
-
-**The gosq project** — gosq-codegen validates gosq's `NewTable`/`NewField` API by using it from the outside. A robust generator is a vote of confidence in the library design.
+- **gosq users** — Go developers using the gosq query builder who want to stop hand-writing table/field declarations. They install this CLI, point it at their Postgres DB, and get a compilable Go file back. They care about correct identifiers, no crashes on unusual schemas, and staying in sync after migrations.
+- **Contributors / maintainer** — currently the author. They need fast CI feedback and confidence that changes don't break the tool on schemas they didn't think to test.
 
 ---
 
-## Key tensions and how they were resolved
+## Key tensions
 
-**Stability vs. improving identifiers.** Identifier changes in generated output rename variables across users' codebases. The naming conventions are correct and comprehensive (17 initialisms, 43 test cases). The agent should favor stability — only change naming logic for a clear bug (produces non-compilable or semantically wrong output), and document it as a renaming change.
+**Integration fixture simplicity vs. realistic coverage.** The unit tests (codegen_test.go) are thorough and use a 17-table, 108-column fixture with complex naming patterns. The integration tests (which hit real Postgres) use 2-table toy schemas. This gap matters: a gosq user who runs this against their real 30-table database is in territory the integration tests haven't covered. I've favored expanding integration coverage as the priority, since that's what closes the gap between "tests pass" and "tool handles real usage."
 
-**Edge-case completeness vs. simplicity.** The current CLI flag surface (`-dsn`, `-out`, `-pkg`, `-schema`, `-dot-import`, `-version`) is the right size. New flags should only appear when a real user can't accomplish something they need — not for hypothetical requirements.
-
-**Fast local tests vs. real database confidence.** Two tiers: unit tests (`go test ./...`) run fast with no database — always. Integration tests (`//go:build integration`) run against real Postgres in CI via `services: postgres:`, with DDL fixtures in `testdata/schemas/`. The integration tier is the next major piece of work — `introspect.Tables` has 0% automated coverage and the full pipeline has never been tested against a real database automatically.
-
-**CI speed vs. CI coverage.** Current CI is ~60–90 seconds. The staticcheck installation step adds ~20–30 seconds and is not cached. Switching to a cached or version-pinned staticcheck would improve contributor feedback time without sacrificing any coverage. This tension should be resolved in favor of speed without sacrificing the staticcheck step.
+**Collision detection completeness vs. complexity.** The existing detection is comprehensive. I didn't favor expanding it further — the current cases are well-tested and the code is already non-trivial. New collision detection only makes sense if a real user can actually hit the undetected case.
 
 ---
 
-## Current focus (after ~37 cycles)
+## Current focus
 
-The project has been through ~37 cycles. All correctness and core infrastructure work is complete:
+The agent will prioritize closing the gap between what the unit tests simulate and what the integration tests actually verify. Specifically:
 
-- Non-ASCII column names: fixed (rune-slicing in `toExported`)
-- Blank identifier table names: error-on-generate
-- Misleading introspect test stub: removed
-- Cross-table field identifier collision: detected
-- Table-field identifier collision: detected
-- Production-scale test (17 tables, 108 columns): added
-- Blank column identifier (`_`): documented and tested
-- Multi-underscore column collision: tested
-- Field-vs-prior-table collision: tested; coverage 98.6%
-- Consecutive initialisations + numeric version segments in `TestToExported`: 43 subtests
-- `staticcheck` confirmed clean
-- **CI added**: GitHub Actions with go build, go vet, go test, staticcheck (cycles 33–34)
-- **Module caching added** to CI (`cache: true` on setup-go)
-- **README CI badge** added (cycle 36)
-- **`-schema` flag behavior** documented in README (cycle 35)
+1. The integration test fixtures are minimal (2–4 tables). A fixture that exercises the full pipeline with 10+ tables, mixed naming patterns, views (which should be excluded), and digit-prefixed columns would give real confidence in the tool.
+2. Views in the same schema are explicitly excluded by the SQL query, but no test verifies this against real Postgres.
+3. `introspect_test.go` is an empty placeholder — fast-path unit coverage for introspect is entirely absent.
 
-**The agent's next priority is integration testing against a real Postgres database in CI.** The tool's full pipeline — DDL → introspect → codegen → compilable Go — has never been tested automatically against a real database. This is the biggest remaining confidence gap.
-
-The work:
-1. Add `testdata/schemas/*.sql` DDL fixtures (e-commerce, non-ASCII columns, PostGIS types, multi-schema)
-2. Add `//go:build integration` tests that load fixtures into real Postgres, run introspect, pipe through codegen, verify output compiles
-3. Add `services: postgres:` to `.github/workflows/ci.yml`
-4. Keep `go test ./...` fast and DB-free for local development
-
-After integration tests are in place, remaining work is incremental: pin staticcheck, update Actions versions, add GoDoc examples.
+After those gaps are closed, the project reaches stage 3 (battle-tested) and the agent should shift to DX improvements and documentation.
 
 ---
 
 ## What could be wrong
 
-**staticcheck installation is slow and unpinned.** The current approach works but is suboptimal. Pinning to a version or caching the binary would both improve CI and make the staticcheck version explicit in the repo's history.
-
-**Branch protection unknown.** Whether the default branch requires PR reviews before merge can't be verified without GitHub API access. If the repo is unprotected and autonomous cycles are running, changes could land on main without review. Enable branch protection (require PR review) before running many cycles autonomously.
-
-**The `format.Source` error path** (1.4% uncovered) is unreachable from any valid input. Not a gap.
-
-**No end-to-end pipeline test against a real database.** The tool has never been automatically tested against a real Postgres instance. `introspect.Tables` has 0% automated coverage. The full pipeline (DDL → introspect → codegen → compile) is verified only by hand. Integration tests in CI with `services: postgres:` and DDL fixtures would close this gap completely.
-
-**No released version tags.** Users who `go install @latest` get whatever main is. There are no semver tags, so the `-version` flag prints module version from build info only for installs after tagging. This isn't a bug, but it limits users' ability to pin to a specific version.
+- **I assumed the repo is public** based on the GitHub URL pattern. If it's private, the prompt-injection risk is lower and branch protection matters less.
+- **Branch protection status is unknown.** I couldn't check the actual GitHub repo settings. The alignment summary recommends the owner verify that the default branch requires PR reviews before starting autonomous cycles.
+- **The `coverage.out` file is committed** to the repo (it appears in the file listing). This is unusual — typically coverage output is gitignored. I've flagged it in the agent's rules but didn't investigate further.
+- **The parent `gosq` library** is a dependency but I haven't read it. The generated output must be compatible with `gosq.NewTable` and `gosq.NewField` — if those signatures change, this tool breaks. The agent will notice if the test stubs stop matching.
+- **Multi-schema usage** (running with `-schema` multiple times to generate separate packages) is documented in the README but has no test coverage. A user following that pattern is in untested territory.

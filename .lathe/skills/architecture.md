@@ -1,142 +1,99 @@
 # Architecture of gosq-codegen
 
-This file exists to answer: what are the structural decisions already made in this codebase, and what do they imply for future changes?
+This file answers the question: how is this project structured, and what are the key decisions the runtime agent needs to know to make safe changes?
 
 ---
 
-## The pipeline
+## Pipeline overview
 
 ```
-PostgreSQL DB
-     │
-     ▼
-internal/introspect   — queries information_schema, returns []Table
-     │
-     ▼
-internal/codegen      — renders []Table into []byte of Go source
-     │
-     ▼
-main.go               — CLI: parses flags, calls introspect, calls codegen, writes files
+main.go  →  introspect.Tables(ctx, db, schema)  →  codegen.Generate(tables, cfg)  →  os.WriteFile
 ```
 
-This is a clean one-way pipeline. Each stage has a single responsibility and a clear boundary. Don't blur these boundaries.
+Three packages, one linear data flow. No interfaces, no dependency injection.
 
 ---
 
-## Package responsibilities
+## `internal/introspect`
 
-### `internal/introspect`
+**Single exported function:** `Tables(ctx, db, schema) ([]Table, error)`
 
-**What it owns:** Reading schema metadata from a live Postgres connection via `information_schema.columns`. It knows about SQL. It knows nothing about Go code generation.
+Runs one SQL query against `information_schema.columns` joined to `information_schema.tables`, filtered by schema and `table_type = 'BASE TABLE'`. Returns tables sorted alphabetically by name, columns ordered by `ordinal_position` (as returned by Postgres — the ORDER BY in the query guarantees this).
 
-**Current state:** Fully implemented. `Tables(ctx context.Context, db *sql.DB, schema string) ([]Table, error)` queries `information_schema.columns` joined with `information_schema.tables` (filtered to `table_type = 'BASE TABLE'` — views are excluded). Returns `[]Table` sorted by table name, with columns in `OrdinalPos` order.
-
-**Driver:** `github.com/lib/pq` is registered in `main.go` (blank import). `introspect` itself has no driver dependency — it receives an already-opened `*sql.DB`. Swapping drivers means changing only `main.go`.
-
-**Context:** `Tables` takes a `context.Context` and uses `db.QueryContext`. `main.go` creates a 30-second timeout context. The timeout is hardcoded — not configurable via flags.
-
-**Error strings:** `introspect` does not prefix its own package name into error strings — callers (main.go) add context via wrapping. This is correct Go convention. The errors currently are: `"query information_schema: %w"`, `"scan row: %w"`, `"iterate rows: %w"`.
-
-### `internal/codegen`
-
-**What it owns:** Rendering `[]introspect.Table` into Go source code. It knows about Go syntax and the gosq API. It knows nothing about databases or SQL.
-
-**Current state:** Fully implemented. `Generate(tables []introspect.Table, cfg Config) ([]byte, error)`:
-- Sorts tables alphabetically (determinism guarantee)
-- Detects all five identifier collision types before rendering (returns a descriptive error naming both conflicting tables/columns)
-- Renders `// Code generated` header, package declaration, import, then one `var Table = NewTable(...)` + `var (...)` block per table
-- Applies `go/format` to guarantee gofmt-clean output
-
-**Config:**
-- `Package string` — Go package name (default: `"schema"`)
-- `DotImport bool` — whether to use `import . "github.com/libliflin/gosq"` (default: `true`)
-
-**`toExported(name string) string`** — converts `snake_case` to `PascalCase` with Go initialisms. Not exported. Tested directly via `TestToExported` (43 subtests). The full initialism list: `id`, `url`, `uri`, `http`, `https`, `sql`, `api`, `uid`, `uuid`, `ip`, `io`, `cpu`, `xml`, `json`, `rpc`, `tls`, `ttl`.
-
-**Identifier capitalization:** The function uses `[]rune` slicing (not byte slicing) for capitalization:
-`strings.ToUpper(string([]rune(part)[:1])) + string([]rune(part)[1:])`. This correctly handles multi-byte UTF-8 characters at the start of a word.
-
-**Blank identifier guard:** If `toExported(tbl.Name) == "_"`, `Generate` returns an error immediately. This prevents generating `var _ = NewTable(...)` which would compile but silently discard the value via the blank identifier.
-
-### `main.go`
-
-**What it owns:** CLI surface. Parses flags, validates them, opens the DB, calls `introspect.Tables`, calls `codegen.Generate`, creates the output directory, writes the file.
-
-**Flags:**
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-dsn` | *(required)* | PostgreSQL connection string |
-| `-out` | `schema/` | Output directory |
-| `-pkg` | `schema` | Go package name for generated file |
-| `-schema` | `public` | PostgreSQL schema to introspect. Generated identifiers do not include the schema name — use distinct `-pkg` and `-out` values when generating from multiple schemas. |
-| `-dot-import` | `true` | Use dot-import for gosq |
-| `-version` | | Print version and exit |
-
-**Validation:** `-pkg` is validated with `go/token.IsIdentifier` and `go/token.IsKeyword` before connecting to the database. Invalid package names produce a clear error immediately.
-
-**Output file:** Always `<out>/<pkg>.go`. With defaults: `schema/schema.go`.
-
-**Timeout:** 30 seconds, hardcoded in the context passed to `introspect.Tables`.
-
-**Success message:** `wrote schema/schema.go (N tables)` — includes count for verification.
-**Warning:** `gosq-codegen: warning: no tables found in schema "<schema>"` if zero tables are returned (still writes the file, which is valid Go with just the package declaration).
-
-**`-version` flag:** Uses `debug.ReadBuildInfo()`. With `go install`, version comes from module metadata and prints correctly (e.g., `v0.1.0`). For local builds (`go build .`), it prints `(devel)` — this is expected Go behavior, not a bug.
-
----
-
-## The output format
-
-Generated files look like this:
-
+**Key types:**
 ```go
-// Code generated by gosq-codegen; DO NOT EDIT.
-
-package schema
-
-import . "github.com/libliflin/gosq"
-
-var Users = NewTable("users")
-
-var (
-	UsersID    = NewField("users.id")
-	UsersName  = NewField("users.name")
-	UsersEmail = NewField("users.email")
-)
-
-var Orders = NewTable("orders")
-
-var (
-	OrdersID     = NewField("orders.id")
-	OrdersUserID = NewField("orders.user_id")
-)
+type Table struct {
+    Schema  string
+    Name    string
+    Columns []Column
+}
+type Column struct {
+    Name       string
+    DataType   string
+    IsNullable bool
+    OrdinalPos int
+}
 ```
 
-Key invariants (tested and enforced):
-- `// Code generated by gosq-codegen; DO NOT EDIT.` is always the first line
-- Tables sorted alphabetically
-- Columns in `OrdinalPos` order within each table
-- `NewField` argument is `"tablename.columnname"` (lowercase originals from Postgres)
-- Field variable names are `TableIdent + toExported(columnName)`
-- `var (...)` block omitted if table has no columns
-- Output is gofmt-clean (tabs, not spaces; `=` signs aligned within `var (...)` blocks)
-- Output is a deterministic function of input
+`DataType` and `OrdinalPos` are collected from `information_schema` but currently unused by `codegen.Generate` — they're present for future use or downstream consumers.
+
+**What the query does NOT return:** views, sequences, materialized views, foreign tables — only base tables. This is an explicit design decision enforced by `AND t.table_type = 'BASE TABLE'`.
+
+**Sort behavior:** The function sorts `tableOrder` alphabetically after collecting all rows. The SQL also has `ORDER BY c.table_name, c.ordinal_position` — so column order within tables comes from Postgres, and table order in the returned slice comes from the Go-level sort.
 
 ---
 
-## Multi-schema behavior
+## `internal/codegen`
 
-The `-schema` flag selects which PostgreSQL schema to introspect. Generated identifiers are based on table and column names only — the schema name is not included in any identifier. Two different schemas sharing table names would produce identical Go identifiers.
+**Single exported function:** `Generate(tables []Table, cfg Config) ([]byte, error)`
 
-**Implication:** Users who need to generate from multiple schemas must use distinct `-pkg` and `-out` values to produce separate Go packages. This is documented in the README and in the flags table. There is no warning when a non-default schema is used.
+Two phases:
+1. **Collision detection** — iterates all tables and columns, builds identifier maps, returns an error if any two names would produce the same Go identifier.
+2. **Rendering** — writes Go source into a `bytes.Buffer`, then passes it through `go/format` for canonical formatting.
+
+**`toExported(name string) string`** — the core naming logic. Converts snake_case DB identifiers to exported Go identifiers:
+- Splits on `_`
+- Applies Go initialism map (`id` → `ID`, `url` → `URL`, etc.) to each part
+- Capitalizes first rune (not first byte — handles non-ASCII correctly)
+- Handles edge cases: empty string → `"_"`, all-underscore → `"_"`, digit-leading → prefix with `"_"`
+
+The initialism map is the canonical list of Go-idiomatic abbreviations. To add an initialism, add to `goInitialisms` and add a test case to `TestToExported`.
+
+**Collision detection is two-pass conceptually but one-pass in code.** It checks:
+- Table–table: two different table names producing the same exported identifier
+- Table–field: a table name and a field name (tableIdent + colIdent) producing the same identifier
+- Field–field: two different (table, column) pairs from different tables producing the same field identifier
+- Column–column within a table: two columns in the same table producing the same per-column identifier
+
+**`go/format.Source`** is applied to the final output. This means the raw buffer doesn't need perfect whitespace — `go/format` normalizes it. It also means if the raw buffer contains invalid Go syntax, `Generate` returns an error. In practice this shouldn't happen (the rendered code is always syntactically valid), but it's a safety net.
 
 ---
 
-## What NOT to add prematurely
+## `main.go`
 
-- Multiple output files (one per table) — single-file is correct until a user reports the output file is unmanageably large
-- A config file (`.gosq-codegen.yaml`) — flags are sufficient
-- Type mapping from Postgres types to Go types — `NewField` takes a string; type information in the generated file would couple output to gosq's internals
-- Interfaces or adapters over `introspect` and `codegen` for hypothetical future databases or output formats — the pipeline is the right shape now
-- A `-timeout` flag — 30 seconds covers all realistic cases unless a user specifically reports hitting it
-- A `-dry-run` flag — the output is deterministic and the file is overwritten atomically, so there's no need
+CLI wiring only. Validates:
+- `-pkg` is a valid, non-keyword Go identifier via `go/token.IsIdentifier` and `token.IsKeyword`
+- `-dsn` is non-empty
+
+No validation of the `-schema` flag beyond passing it to `introspect.Tables`. The schema name is used directly in a parameterized SQL query (`WHERE c.table_schema = $1`), so SQL injection is not a concern.
+
+**Timeout:** 30 seconds on the database context. This is a CLI tool — long-running introspection is a user experience problem, not a correctness problem.
+
+**Output:** Prints `wrote schema/schema.go (N tables)` to stdout on success. All errors go to stderr with the `gosq-codegen: ` prefix. Exits 1 on any error.
+
+---
+
+## What to leave alone
+
+- The `information_schema` SQL query — it is minimal and correct. Changing it risks breaking schema isolation or including non-base-table objects.
+- The `go/format` call — it must stay. Removing it would produce unformatted output that violates Go conventions.
+- The collision detection logic — it's comprehensive and well-tested. Changes here need matching test cases.
+- The `toExported` initialism list — additions are fine; removals would break existing generated files for anyone with columns named `id`, `url`, etc.
+
+---
+
+## Extension points
+
+The `Column.DataType` and `Column.IsNullable` fields are populated by `introspect.Tables` but ignored by `codegen.Generate`. A future feature that generates typed fields (e.g., `UsersID int`, `UsersEmail string`) would use these. Right now they're informational only.
+
+The `Config` struct has only `Package` and `DotImport`. Any new generation options (custom naming function, filter for specific tables, type generation) would go in `Config`.
