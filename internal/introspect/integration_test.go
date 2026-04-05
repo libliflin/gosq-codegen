@@ -391,6 +391,119 @@ func TestTablesViewExclusion(t *testing.T) {
 	}
 }
 
+// TestPipelineProductionScale runs the full pipeline against a larger DDL
+// fixture that exercises naming patterns not present in the ecommerce fixture:
+// digit-prefixed columns (2fa_enabled → _2faEnabled), initialisms (api_key →
+// APIKey, http_status_code → HTTPStatusCode, ip_addr → IPAddr, user_uuid →
+// UserUUID), and consecutive initialisations. Verifies that introspect returns
+// the expected tables, codegen produces the correct exported identifiers, and
+// the generated Go source compiles without error.
+func TestPipelineProductionScale(t *testing.T) {
+	db := openIntegrationDB(t)
+	ctx := context.Background()
+
+	const schema = "gosq_prodscale_test"
+
+	if _, err := db.ExecContext(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE"); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	})
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+		t.Fatalf("set search_path: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/production_scale.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	tables, err := introspect.Tables(ctx, db, schema)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+	if len(tables) != 5 {
+		names := make([]string, len(tables))
+		for i, tbl := range tables {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("expected 5 tables, got %d: %v", len(tables), names)
+	}
+
+	src, err := codegen.Generate(tables, codegen.Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	generated := string(src)
+
+	// Spot-check that key naming-pattern identifiers are present.
+	// api_keys.api_key   → ApiKeysAPIKey         (initialism)
+	// http_logs.url      → HttpLogsURL            (initialism)
+	// http_logs.ip_addr  → HttpLogsIPAddr         (initialism)
+	// http_logs.http_status_code → HttpLogsHTTPStatusCode (consecutive)
+	// sessions.user_uuid → SessionsUserUUID       (consecutive)
+	// users.2fa_enabled  → Users_2faEnabled       (digit-prefixed)
+	wantIdents := []string{
+		"Users_2faEnabled",
+		"ApiKeysAPIKey",
+		"HttpLogsHTTPStatusCode",
+		"HttpLogsURL",
+		"HttpLogsIPAddr",
+		"SessionsUserUUID",
+	}
+	for _, ident := range wantIdents {
+		if !strings.Contains(generated, ident) {
+			t.Errorf("generated source missing identifier %q\nsource:\n%s", ident, generated)
+		}
+	}
+
+	// Verify the generated code compiles in a real Go module.
+	dir := t.TempDir()
+
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	write(filepath.Join(dir, "gosqstub", "go.mod"), "module github.com/libliflin/gosq\n\ngo 1.22\n")
+	write(filepath.Join(dir, "gosqstub", "gosq.go"), `package gosq
+
+type Table struct{}
+type Field struct{}
+
+func NewTable(name string) Table { return Table{} }
+func NewField(name string) Field { return Field{} }
+`)
+	write(filepath.Join(dir, "schema", "schema.go"), generated)
+	write(filepath.Join(dir, "go.mod"),
+		"module testmod\n\ngo 1.22\n\nrequire github.com/libliflin/gosq v0.0.1\n\nreplace github.com/libliflin/gosq => ./gosqstub\n")
+
+	cmd := exec.Command("go", "build", "./schema")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s\n\ngenerated source:\n%s", out, generated)
+	}
+}
+
 // TestPipelineEcommerce runs the full pipeline end-to-end:
 // DDL fixture → introspect.Tables (real Postgres) → codegen.Generate → go build.
 // This verifies that the tool's core promise holds: point it at a database,

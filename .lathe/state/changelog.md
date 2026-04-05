@@ -2,6 +2,35 @@
 
 ---
 
+# Changelog — Cycle 46
+
+## Who This Helps
+- **Stakeholder:** gosq users with production schemas containing initialisms, digit-prefixed columns, and consecutive-initialism patterns
+- **Impact:** The full pipeline (DDL → `introspect.Tables` → `codegen.Generate` → `go build`) was previously only exercised against a 2-table, 8-column fixture. A gosq user whose schema has `api_key`, `2fa_enabled`, `http_status_code`, `ip_addr`, or `user_uuid` columns could trust unit tests but not that real Postgres + real codegen + real compilation all worked together for those patterns. `TestPipelineProductionScale` now verifies the complete path for every major naming edge case.
+
+## Observed
+- `TestPipelineEcommerce` runs the full pipeline but with only `users` and `orders` (2 tables, 8 columns — all simple `snake_case`).
+- `TestGenerateProductionScale` (unit tier) exercises 17 tables and 108 columns inline, covering digit-prefixed (`2fa_enabled`), initialisms (`api_key`, `url`, `ip_addr`), and consecutive patterns (`http_status_code`, `user_uuid`) — but with no real database.
+- No integration test had ever verified that Postgres stores and returns `"2fa_enabled"` correctly, or that the full codegen pipeline produces `Users_2faEnabled`, `ApiKeysAPIKey`, `HttpLogsHTTPStatusCode`, etc., and that the result compiles.
+
+## Applied
+- Created `testdata/schemas/production_scale.sql`: 5 tables (`users`, `api_keys`, `http_logs`, `sessions`, `audit_logs`) with 35 columns total. Covers: digit-prefixed column (`"2fa_enabled"`, quoted in DDL for Postgres compatibility), initialisms (`api_key`, `url`, `ip_addr`, `user_uuid`), consecutive initialisations (`http_status_code`, `user_uuid`), and common patterns (`created_at`, `updated_at`, `is_active`).
+- Added `TestPipelineProductionScale` to `internal/introspect/integration_test.go`: loads the fixture into a temporary schema, calls `Tables`, calls `Generate`, asserts 6 key identifiers appear in the output (`Users_2faEnabled`, `ApiKeysAPIKey`, `HttpLogsHTTPStatusCode`, `HttpLogsURL`, `HttpLogsIPAddr`, `SessionsUserUUID`), then compiles the generated source in a real Go module.
+- **Files:** `testdata/schemas/production_scale.sql`, `internal/introspect/integration_test.go`
+
+## Validated
+```
+go build ./...                   — OK
+go test ./...                    — OK (unit tests pass, no DB required)
+go vet ./...                     — OK
+go build -tags integration ./... — OK (integration test file compiles)
+```
+
+## Next
+- All known gaps are now closed: view exclusion is tested, schema isolation is tested, non-ASCII columns are tested, full pipeline is tested against both a minimal fixture and a production-scale fixture. Further improvements should be driven by real user feedback.
+
+---
+
 # Changelog — Cycle 45
 
 ## Who This Helps
