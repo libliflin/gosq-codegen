@@ -2,36 +2,6 @@
 
 ---
 
-# Changelog — Cycle 40
-
-## Who This Helps
-- **Stakeholder:** contributors and CI
-- **Impact:** CI was failing on every push with `import cycle not allowed in test`. The integration test (`TestTablesEcommerce`, `TestPipelineEcommerce`) added in cycle 38/39 was declared as `package introspect` and imported `internal/codegen`, which itself imports `internal/introspect` — a cycle. No test was running. This fix restores CI to passing.
-
-## Observed
-- CI run #24002047580 failed with: `imports github.com/libliflin/gosq-codegen/internal/introspect: import cycle not allowed in test`
-- The integration test file used `package introspect` (internal package), not `package introspect_test` (external test package)
-- Because `codegen` imports `introspect`, adding a `codegen` import inside the `introspect` package created the cycle
-
-## Applied
-- Changed `package introspect` → `package introspect_test` in `internal/introspect/integration_test.go`
-- Added explicit `introspect` import so the tests can call `introspect.Tables(...)`
-- **File:** `internal/introspect/integration_test.go`
-- **PR:** https://github.com/libliflin/gosq-codegen/pull/8
-
-## Validated
-```
-go build -tags integration ./...   — OK
-go test ./...                      — OK
-go vet ./...                       — OK
-```
-
-## Next
-- CI should now pass with the integration tests running against the Postgres service. Once PR #8 merges, the full integration test suite is active.
-- Node.js 20 deprecation: `actions/checkout@v4` and `actions/setup-go@v5` will need updates before September 2026.
-
----
-
 # Changelog — Cycle 39
 
 ## Who This Helps

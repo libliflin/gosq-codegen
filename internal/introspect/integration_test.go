@@ -9,7 +9,7 @@
 //
 // In CI, the Postgres service is provided via GitHub Actions services: postgres:
 // and TEST_DSN is set automatically.
-package introspect
+package introspect_test
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/libliflin/gosq-codegen/internal/codegen"
+	"github.com/libliflin/gosq-codegen/internal/introspect"
 	_ "github.com/lib/pq"
 )
 
@@ -80,7 +81,7 @@ func TestTablesEcommerce(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
@@ -197,7 +198,7 @@ func TestPipelineEcommerce(t *testing.T) {
 		t.Fatalf("load fixture: %v", err)
 	}
 
-	tables, err := Tables(ctx, db, schema)
+	tables, err := introspect.Tables(ctx, db, schema)
 	if err != nil {
 		t.Fatalf("Tables: %v", err)
 	}
