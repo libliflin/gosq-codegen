@@ -42,7 +42,7 @@ This writes `schema/schema.go` into your project (named after the `-pkg` value).
 | `-dsn` | *(required)* | PostgreSQL connection string |
 | `-out` | `schema/` | Output directory |
 | `-pkg` | `schema` | Go package name for generated file |
-| `-schema` | `public` | PostgreSQL schema to introspect |
+| `-schema` | `public` | PostgreSQL schema to introspect. Generated identifiers do not include the schema name — use distinct `-pkg` and `-out` values when generating from multiple schemas. |
 | `-dot-import` | `true` | Use dot-import (`import . "github.com/libliflin/gosq"`) |
 | `-version` | | Print version and exit |
 

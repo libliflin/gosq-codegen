@@ -2,34 +2,6 @@
 
 ---
 
-# Changelog — Cycle 35
-
-## Who This Helps
-- **Stakeholder:** gosq users with multi-schema PostgreSQL setups
-- **Impact:** A user who runs gosq-codegen twice for different schemas (e.g. `-schema public` and `-schema reporting`) no longer silently gets identical identifiers and an overwritten output file. The README now explains this behavior up front and tells them how to avoid it: use distinct `-pkg` and `-out` values.
-
-## Observed
-- The `-schema` flag description in the README said only "PostgreSQL schema to introspect" — no hint that generated identifiers exclude the schema name.
-- A user with tables in both `public` and `reporting` schemas running the tool twice would produce identically-named Go variables (`UsersID` etc.) in the same file. The second run would silently overwrite the first. No warning, no error.
-- This was called out in cycles 33 and 34 as the next documentation gap after CI was established.
-
-## Applied
-- Extended the `-schema` flag description in the README flags table to note: "Generated identifiers do not include the schema name — use distinct `-pkg` and `-out` values when generating from multiple schemas."
-- **File:** `README.md`
-
-## Validated
-```
-go build ./...   — OK
-go test ./...    — OK
-go vet ./...     — OK
-```
-
-## Next
-- The Node.js 20 deprecation warning appeared in CI: `actions/checkout@v4` and `actions/setup-go@v5` will need to be updated before September 2026. Not urgent yet, but worth updating to v5/v6 before the forced cutover.
-- All known correctness gaps are closed. Further improvements should be driven by real user feedback.
-
----
-
 # Changelog — Cycle 34
 
 ## Who This Helps
