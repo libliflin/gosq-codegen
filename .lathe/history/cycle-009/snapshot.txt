@@ -1,0 +1,94 @@
+# Project Snapshot
+Generated: Sun Apr  5 14:44:05 EDT 2026
+
+## Git Status
+
+## Recent Commits (last 10)
+223b0d2 lathe: cycle cleanup (agent left uncommitted changes)
+3a7454f add MariaDB support via -driver mariadb
+a8a5d0c lathe: cycle cleanup (agent left uncommitted changes)
+e9680ee add CockroachDB support via -driver cockroach
+e2bc77f add SQLite support via -driver sqlite and DialectSQLite (#20)
+77ecbac add MySQL integration test with CI service (#19)
+aba3fa3 add MySQL support via -driver flag and Dialect abstraction (#18)
+5367cc8 add compilation test for DotImport=false (--dot-import=false flag path) (#17)
+536531d add unit tests for introspect error paths, bringing coverage to 100% (#16)
+78d3bf2 add integration test for non-ASCII table names through full pipeline (#15)
+
+## Go Module
+module github.com/libliflin/gosq-codegen
+
+go 1.25.0
+
+## Build
+```
+OK — builds clean
+```
+
+## Tests
+```
+?   	github.com/libliflin/gosq-codegen	[no test files]
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.244s
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.334s
+```
+
+## Vet
+```
+OK — vet clean
+```
+
+## Packages
+github.com/libliflin/gosq-codegen
+github.com/libliflin/gosq-codegen/internal/codegen
+github.com/libliflin/gosq-codegen/internal/introspect
+
+## Go Files
+./internal/codegen/codegen_test.go
+./internal/codegen/codegen.go
+./internal/introspect/integration_test.go
+./internal/introspect/introspect_test.go
+./internal/introspect/introspect.go
+./internal/introspect/sqlite_test.go
+./main.go
+
+## TODOs
+(none)
+
+## Coverage
+```
+ok  	github.com/libliflin/gosq-codegen/internal/codegen	0.235s	coverage: 98.6% of statements
+ok  	github.com/libliflin/gosq-codegen/internal/introspect	0.329s	coverage: 83.6% of statements
+(no coverage data)
+```
+
+## CI/CD Status
+
+### Primary PR: #21 (branch: lathe/add-support-for-more-databases-20260405-143922)
+```
+test: pending
+test: pending
+```
+
+### PR State
+```
+{"mergeStateStatus":"UNSTABLE","mergeable":"MERGEABLE","number":21,"state":"OPEN"}
+```
+
+### All Open PRs (by current user)
+```
+#21 [lathe/add-support-for-more-databases-20260405-143922] state:OPEN checks:pass
+```
+
+### CI Configuration
+Workflows found:
+.github/workflows/ci.yml
+
+### Recent Workflow Runs
+```
+#24007999654 in_progress/ event:pull_request branch:lathe/add-support-for-more-databases-20260405-143922 at:2026-04-05T18:44:03
+#24007998851 in_progress/ event:push branch:lathe/add-support-for-more-databases-20260405-143922 at:2026-04-05T18:44:00
+#24007995680 in_progress/ event:pull_request branch:lathe/add-support-for-more-databases-20260405-143922 at:2026-04-05T18:43:50
+#24007994918 in_progress/ event:push branch:lathe/add-support-for-more-databases-20260405-143922 at:2026-04-05T18:43:47
+#24007959055 completed/success event:pull_request branch:lathe/add-support-for-more-databases-20260405-143922 at:2026-04-05T18:41:45
+```
+

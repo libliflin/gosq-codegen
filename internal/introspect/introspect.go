@@ -22,6 +22,8 @@ const (
 	// The schema parameter is used as the Table.Schema field only; SQLite
 	// does not support named schemas in the PostgreSQL/MySQL sense.
 	DialectSQLite Dialect = "sqlite"
+	// DialectSQLServer uses @p1 positional placeholders (Microsoft SQL Server).
+	DialectSQLServer Dialect = "sqlserver"
 )
 
 // Table represents a database table and its columns.
@@ -49,8 +51,11 @@ func Tables(ctx context.Context, db *sql.DB, schema string, d Dialect) ([]Table,
 	}
 
 	placeholder := "$1"
-	if d == DialectMySQL {
+	switch d {
+	case DialectMySQL:
 		placeholder = "?"
+	case DialectSQLServer:
+		placeholder = "@p1"
 	}
 	q := `
 SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.ordinal_position
