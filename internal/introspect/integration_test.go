@@ -254,6 +254,85 @@ func TestTablesNonASCII(t *testing.T) {
 	}
 }
 
+// TestTablesSchemaIsolation verifies that Tables returns only tables from the
+// specified schema. It creates two schemas with different tables and confirms
+// that calling Tables with one schema name does not include tables from the
+// other. This validates the WHERE c.table_schema = $1 filter in the introspect
+// query — the behaviour documented in the README for multi-schema setups.
+func TestTablesSchemaIsolation(t *testing.T) {
+	db := openIntegrationDB(t)
+	ctx := context.Background()
+
+	const (
+		schemaA = "gosq_isol_a" // ecommerce tables: orders, users
+		schemaB = "gosq_isol_b" // reporting table:  reports
+	)
+
+	for _, s := range []string{schemaA, schemaB} {
+		if _, err := db.ExecContext(ctx, "DROP SCHEMA IF EXISTS "+s+" CASCADE"); err != nil {
+			t.Fatalf("drop schema %s: %v", s, err)
+		}
+		if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+s); err != nil {
+			t.Fatalf("create schema %s: %v", s, err)
+		}
+		s := s
+		t.Cleanup(func() {
+			db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+s+" CASCADE")
+		})
+	}
+
+	loadFixture := func(schema, fixturePath string) {
+		t.Helper()
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("get conn: %v", err)
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, "SET search_path TO "+schema); err != nil {
+			t.Fatalf("set search_path: %v", err)
+		}
+		ddl, err := os.ReadFile(fixturePath)
+		if err != nil {
+			t.Fatalf("read fixture %s: %v", fixturePath, err)
+		}
+		if _, err := conn.ExecContext(ctx, string(ddl)); err != nil {
+			t.Fatalf("load fixture %s: %v", fixturePath, err)
+		}
+	}
+
+	loadFixture(schemaA, "../../testdata/schemas/ecommerce.sql")
+	loadFixture(schemaB, "../../testdata/schemas/reporting.sql")
+
+	// Tables(schemaB) must return only the reporting table, not ecommerce tables.
+	tablesB, err := introspect.Tables(ctx, db, schemaB)
+	if err != nil {
+		t.Fatalf("Tables(%q): %v", schemaB, err)
+	}
+	if len(tablesB) != 1 {
+		names := make([]string, len(tablesB))
+		for i, tbl := range tablesB {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("Tables(%q): expected 1 table, got %d: %v", schemaB, len(tablesB), names)
+	}
+	if tablesB[0].Name != "reports" {
+		t.Errorf("Tables(%q): tables[0].Name = %q, want %q", schemaB, tablesB[0].Name, "reports")
+	}
+
+	// Tables(schemaA) must return only the ecommerce tables, not the reporting table.
+	tablesA, err := introspect.Tables(ctx, db, schemaA)
+	if err != nil {
+		t.Fatalf("Tables(%q): %v", schemaA, err)
+	}
+	if len(tablesA) != 2 {
+		names := make([]string, len(tablesA))
+		for i, tbl := range tablesA {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("Tables(%q): expected 2 tables, got %d: %v", schemaA, len(tablesA), names)
+	}
+}
+
 // TestPipelineEcommerce runs the full pipeline end-to-end:
 // DDL fixture → introspect.Tables (real Postgres) → codegen.Generate → go build.
 // This verifies that the tool's core promise holds: point it at a database,

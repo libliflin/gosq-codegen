@@ -2,6 +2,36 @@
 
 ---
 
+# Changelog — Cycle 42
+
+## Who This Helps
+- **Stakeholder:** gosq users with multi-schema PostgreSQL setups
+- **Impact:** The introspect query's `WHERE c.table_schema = $1` clause has never been tested in a live environment where multiple schemas exist simultaneously. `TestTablesSchemaIsolation` now verifies that `Tables("reporting")` returns only reporting tables, not tables from a coexisting `public`-equivalent schema — and vice versa. A future regression in the schema filter would be caught immediately in CI.
+
+## Observed
+- Cycle 35 documented in the README that users with multiple schemas must use distinct `-pkg` and `-out` values — that documentation was backed by code inspection, not a test.
+- `TestTablesEcommerce` and `TestTablesNonASCII` each create a single schema and verify columns within it. Neither test verifies that tables from a different schema are excluded from results.
+- The `WHERE c.table_schema = $1` filter in `introspect.Tables` (line 35 of `introspect.go`) is the entire schema isolation mechanism. It was untested in a multi-schema environment.
+
+## Applied
+- Created `testdata/schemas/reporting.sql`: DDL for a `reports` table (id, title, created_at — all NOT NULL). Minimal fixture, distinct from the ecommerce fixture.
+- Added `TestTablesSchemaIsolation` to `internal/introspect/integration_test.go` (`//go:build integration`): creates two schemas (`gosq_isol_a` with ecommerce DDL, `gosq_isol_b` with reporting DDL), calls `Tables` with each schema name, and asserts that each call returns only the tables from the specified schema.
+- **Files:** `testdata/schemas/reporting.sql`, `internal/introspect/integration_test.go`
+
+## Validated
+```
+go build ./...                   — OK
+go test ./...                    — OK (unit tests pass, no DB required)
+go vet ./...                     — OK
+go build -tags integration ./... — OK (integration test file compiles)
+```
+
+## Next
+- Update `actions/checkout@v4` and `actions/setup-go@v5` to versions using Node.js 22 before GitHub's September 2026 deprecation cutover. Check the latest action version tags before making this change.
+- All known correctness and integration gaps are now covered.
+
+---
+
 # Changelog — Cycle 41
 
 ## Who This Helps
