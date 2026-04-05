@@ -2,37 +2,6 @@
 
 ---
 
-# Changelog — Cycle 39
-
-## Who This Helps
-- **Stakeholder:** gosq users and contributors
-- **Impact:** The tool's full pipeline — DDL → `introspect.Tables` (real Postgres) → `codegen.Generate` → `go build` — is now verified automatically in CI on every push and PR. Previously, `TestTablesEcommerce` verified introspect returns correct data, and `TestGenerateCompiles` (unit test) verified codegen output compiles from inline data. Neither test exercised the complete path from a real database all the way to compilable Go. `TestPipelineEcommerce` closes this gap.
-
-## Observed
-- `TestTablesEcommerce` verifies `introspect.Tables` returns correct tables/columns from real Postgres. It does not pipe the result through `codegen.Generate`.
-- `TestGenerateCompiles` verifies `codegen.Generate` output compiles, but uses inline `[]introspect.Table` — no real database involved.
-- The claim "point it at your database and get compilable Go" had never been verified by a single automated test that did both.
-
-## Applied
-- Added `TestPipelineEcommerce` to `internal/introspect/integration_test.go` (`//go:build integration`).
-- The test: creates a temporary Postgres schema → loads `testdata/schemas/ecommerce.sql` → calls `Tables` → calls `codegen.Generate` → writes to a temp module with a gosq stub → runs `go build ./schema`.
-- Added `"os/exec"`, `"path/filepath"`, and `"github.com/libliflin/gosq-codegen/internal/codegen"` to the integration test imports.
-- **File:** `internal/introspect/integration_test.go`
-
-## Validated
-```
-go build ./...               — OK
-go test ./...                — OK (unit tests pass, no DB required)
-go vet ./...                 — OK
-go build -tags integration ./... — OK (integration test file compiles)
-```
-
-## Next
-- The full pipeline is now verified end-to-end in CI. All core correctness and infrastructure work is done.
-- Remaining incremental improvements: pin staticcheck version (CI speed, ~20–30s savings), update Actions versions before Node.js 20 deprecation in September 2026.
-
----
-
 # Changelog — Cycle 38
 
 ## Who This Helps
