@@ -825,6 +825,167 @@ func NewField(name string) Field { return Field{} }
 	}
 }
 
+// TestPipelineMySQLComplexSchema runs the full pipeline against a realistic
+// 10-table SaaS schema in MySQL. This is the MySQL counterpart to
+// TestPipelineComplexSchema and exercises the same naming patterns against a
+// real MySQL 8 database:
+//   - compound initialisations (http, url, tls, api, ip, uuid, id, uri)
+//   - a digit-prefixed column (`2fa_enabled` → Users_2faEnabled)
+//   - nullable columns
+//   - a VIEW (active_users) that must be excluded from results
+//
+// Requires TEST_MYSQL_DSN.
+func TestPipelineMySQLComplexSchema(t *testing.T) {
+	db := openMySQLIntegrationDB(t)
+	ctx := context.Background()
+
+	const dbName = "gosq_mysql_saas_test"
+
+	if _, err := db.ExecContext(ctx, "DROP DATABASE IF EXISTS "+dbName); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE DATABASE "+dbName); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	t.Cleanup(func() {
+		db.ExecContext(context.Background(), "DROP DATABASE IF EXISTS "+dbName)
+	})
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("get conn: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "USE "+dbName); err != nil {
+		t.Fatalf("use database: %v", err)
+	}
+
+	ddl, err := os.ReadFile("../../testdata/schemas/mysql_saas.sql")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	for _, stmt := range splitMySQLStatements(string(ddl)) {
+		n := len(stmt)
+		if n > 50 {
+			n = 50
+		}
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("load fixture (%q): %v", stmt[:n], err)
+		}
+	}
+
+	tables, err := introspect.Tables(ctx, db, dbName, introspect.DialectMySQL)
+	if err != nil {
+		t.Fatalf("Tables: %v", err)
+	}
+
+	// Must be exactly 10 base tables — the view (active_users) must be excluded.
+	if len(tables) != 10 {
+		names := make([]string, len(tables))
+		for i, tbl := range tables {
+			names[i] = tbl.Name
+		}
+		t.Fatalf("expected 10 tables (view excluded), got %d: %v", len(tables), names)
+	}
+
+	// Verify the view is not present.
+	for _, tbl := range tables {
+		if tbl.Name == "active_users" {
+			t.Errorf("view %q must not appear in Tables output", tbl.Name)
+		}
+	}
+
+	// Spot-check: users table must have 8 columns including the digit-prefixed one.
+	var usersTable *introspect.Table
+	for i := range tables {
+		if tables[i].Name == "users" {
+			usersTable = &tables[i]
+			break
+		}
+	}
+	if usersTable == nil {
+		t.Fatal("users table missing from result")
+	}
+	if len(usersTable.Columns) != 8 {
+		t.Errorf("users: expected 8 columns, got %d", len(usersTable.Columns))
+	}
+	var found2FA bool
+	for _, col := range usersTable.Columns {
+		if col.Name == "2fa_enabled" {
+			found2FA = true
+			break
+		}
+	}
+	if !found2FA {
+		t.Error(`users: column "2fa_enabled" missing from introspect result`)
+	}
+
+	// Run the full pipeline: introspect → codegen → compile.
+	src, err := codegen.Generate(tables, codegen.Config{Package: "schema", DotImport: true})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// Verify key identifiers from compound initialism patterns.
+	generated := string(src)
+	identChecks := []string{
+		"HTTPRequests",            // http initialism
+		"HTTPRequestsURLPath",     // http + url initialisations
+		"TLSCertificates",         // tls initialism
+		"TLSCertificatesID",       // tls + id initialisms
+		"APIKeys",                 // api initialism
+		"APIKeysAccountID",        // api + id initialisms
+		"AuditLogsIPAddr",         // ip initialism
+		"DevicesDeviceUUID",       // uuid initialism
+		"Users_2faEnabled",        // digit-prefixed column
+		"OauthClients",            // oauth is not an initialism
+		"OauthClientsRedirectURI", // uri initialism
+	}
+	for _, ident := range identChecks {
+		if !strings.Contains(generated, ident) {
+			t.Errorf("generated source missing expected identifier %q", ident)
+		}
+	}
+
+	// The view must not appear in the generated output.
+	if strings.Contains(generated, "ActiveUsers") {
+		t.Error("generated source must not contain ActiveUsers (view should be excluded)")
+	}
+
+	// Compile the generated output.
+	dir := t.TempDir()
+
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	write(filepath.Join(dir, "gosqstub", "go.mod"), "module github.com/libliflin/gosq\n\ngo 1.22\n")
+	write(filepath.Join(dir, "gosqstub", "gosq.go"), `package gosq
+
+type Table struct{}
+type Field struct{}
+
+func NewTable(name string) Table { return Table{} }
+func NewField(name string) Field { return Field{} }
+`)
+	write(filepath.Join(dir, "schema", "schema.go"), string(src))
+	write(filepath.Join(dir, "go.mod"),
+		"module testmod\n\ngo 1.22\n\nrequire github.com/libliflin/gosq v0.0.1\n\nreplace github.com/libliflin/gosq => ./gosqstub\n")
+
+	cmd := exec.Command("go", "build", "./schema")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s\n\ngenerated source:\n%s", out, src)
+	}
+}
+
 // openMySQLIntegrationDB opens a MySQL connection using TEST_MYSQL_DSN and
 // skips the test if the variable is not set. The connection is closed via
 // t.Cleanup.

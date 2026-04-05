@@ -39,14 +39,15 @@ import (
 	"github.com/libliflin/gosq-codegen/internal/introspect"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
-	driver := flag.String("driver", "postgres", "database driver: postgres or mysql")
+	driver := flag.String("driver", "postgres", "database driver: postgres, mysql, or sqlite")
 	dsn := flag.String("dsn", "", "database connection string (required)")
 	out := flag.String("out", "schema/", "output directory")
 	pkg := flag.String("pkg", "schema", "Go package name for generated file")
-	schema := flag.String("schema", "public", "schema to introspect (MySQL: use database name)")
+	schema := flag.String("schema", "public", "schema to introspect (MySQL: use database name; SQLite: stored as Table.Schema, not used for filtering)")
 	dotImport := flag.Bool("dot-import", true, "use dot-import for gosq (import . \"github.com/libliflin/gosq\")")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
@@ -72,8 +73,10 @@ func main() {
 		dialect = introspect.DialectPostgres
 	case "mysql":
 		dialect = introspect.DialectMySQL
+	case "sqlite":
+		dialect = introspect.DialectSQLite
 	default:
-		fmt.Fprintf(os.Stderr, "gosq-codegen: unsupported driver %q (supported: postgres, mysql)\n", *driver)
+		fmt.Fprintf(os.Stderr, "gosq-codegen: unsupported driver %q (supported: postgres, mysql, sqlite)\n", *driver)
 		os.Exit(1)
 	}
 
