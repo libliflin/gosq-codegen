@@ -852,11 +852,20 @@ func openMySQLIntegrationDB(t *testing.T) *sql.DB {
 func splitMySQLStatements(sql string) []string {
 	var stmts []string
 	for _, stmt := range strings.Split(sql, ";") {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" || strings.HasPrefix(stmt, "--") {
+		// Strip comment lines before checking for content — a segment may begin
+		// with file-header comments but still contain a valid SQL statement.
+		var lines []string
+		for _, line := range strings.Split(stmt, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+				continue
+			}
+			lines = append(lines, line)
+		}
+		if len(lines) == 0 {
 			continue
 		}
-		stmts = append(stmts, stmt)
+		stmts = append(stmts, strings.TrimSpace(strings.Join(lines, "\n")))
 	}
 	return stmts
 }
