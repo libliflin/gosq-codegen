@@ -32,6 +32,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'YourStrong!Passw0rd' -Q 'SELECT 1'"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6.0.2
       - uses: actions/setup-go@v6.4.0
@@ -45,5 +57,6 @@ jobs:
         env:
           TEST_DSN: postgres://postgres:test@localhost:5432/testdb?sslmode=disable
           TEST_MYSQL_DSN: root:test@tcp(127.0.0.1:3306)/testdb
+          TEST_SQLSERVER_DSN: "sqlserver://sa:YourStrong%21Passw0rd@localhost:1433"
       - run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
       - run: staticcheck ./...
